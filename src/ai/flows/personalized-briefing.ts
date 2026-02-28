@@ -28,7 +28,7 @@ export type PersonalizedBriefingInput = z.infer<typeof PersonalizedBriefingInput
 export type PersonalizedBriefingOutput = string;
 
 const PromptOutputSchema = z.object({
-  briefing: z.string().describe('A detailed, personalized daily briefing text.')
+  briefing: z.string().describe('A brief, 2-3 sentence functional summary.')
 });
 
 const PersonalizedBriefingPromptInputSchema = z.object({
@@ -57,15 +57,14 @@ const prompt = ai.definePrompt({
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
     ]
   },
-  prompt: `You are an AI assistant for a personalized premium dashboard. Your goal is to provide a detailed, intelligent, and friendly morning briefing.
+  prompt: `You are an AI assistant providing a brief, functional executive summary for a personalized dashboard.
 
-Summarize ALL available data points into a cohesive 3-4 sentence paragraph. Do not just list them; synthesize them naturally. 
+Strictly summarize the data context in 2-3 concise sentences. Focus only on actionable events:
+- Weather changes (rain, spikes in temp).
+- Market moves (portfolio trends).
+- Upcoming matches for the user's specific followed teams.
 
-- Mention upcoming sports matches or recent scores if available.
-- Mention specific weather forecasts (rain, sun, temperature).
-- Synthesize market trends and news headlines into the narrative.
-
-For example: "It's a beautiful sunny day in London, perfect for the Lakers game tonight at 7 PM. Your tech stocks are looking strong with Google leading the way, though you might want to keep an eye on the latest quantum computing breakthroughs in the news."
+Do not use flowery language or greetings like "I hope you have a great day." Be direct and functional.
 
 Data Context:
 {{#if enabledWidgets.weather}}
@@ -85,10 +84,8 @@ Data Context:
 {{/if}}
 
 {{#if enabledWidgets.sports}}
-  Upcoming Matches/Recent Results: {{sportsSummary}}
-{{/if}}
-
-Generate a detailed, premium briefing based on this context.`,
+  Upcoming Match Summary: {{sportsSummary}}
+{{/if}}`,
 });
 
 const personalizedBriefingFlow = ai.defineFlow(
@@ -135,10 +132,10 @@ const personalizedBriefingFlow = ai.defineFlow(
 
     try {
       const {output} = await prompt(promptInput);
-      return output?.briefing || "Welcome to your horizon. Your personalized modules are synchronized and ready.";
+      return output?.briefing || "Dashboard synchronized. Modules are up to date and ready.";
     } catch (err) {
       console.error("Briefing Flow Error:", err);
-      return "Welcome back! Your dashboard is fully loaded with your latest preferences. Have a productive day!";
+      return "Welcome back. Your dashboard is ready with the latest updates on your followed interests.";
     }
   }
 );
@@ -149,27 +146,27 @@ export async function generatePersonalizedBriefing(input: PersonalizedBriefingIn
 
 async function getWeatherData(location: string | undefined): Promise<string | undefined> {
   if (!location) return undefined;
-  // This would ideally fetch from a weather service, but for the flow we use a detailed mock or simulated insight
-  return `Currently 22°C and clear skies in ${location}. Rain is expected to start around 4:00 PM today, so keep an umbrella handy. Highs of 25°C.`;
+  return `Forecast for ${location}: Highs of 22°C. Scattered clouds with a 40% chance of rain developing in the late afternoon.`;
 }
 
 async function getNewsHeadlines(topics: string[] | undefined): Promise<string[] | undefined> {
   if (!topics || topics.length === 0) return undefined;
   return [
-    'Major indices hit record highs in early trading.',
-    'New sustainable energy initiative announced by global coalition.',
-    'Breakthrough in medical research promises improved patient outcomes.'
+    'Major tech sector updates show strong quarterly performance.',
+    'Renewable energy projects gain momentum in urban planning.',
+    'Global logistics shifts impact early market trading.'
   ];
 }
 
 async function getMarketSummary(stocks: string[] | undefined): Promise<string | undefined> {
   if (!stocks || stocks.length === 0) return undefined;
   const primary = stocks[0].split(' ')[0];
-  return `Your portfolio is trending positive, with ${primary} showing significant momentum today.`;
+  return `Your portfolio is trending positively, led by strong movement in ${primary}.`;
 }
 
 async function getSportsSummary(teams: string[] | undefined): Promise<string | undefined> {
   if (!teams || teams.length === 0) return undefined;
-  const primary = teams[0];
-  return `The ${primary} have an upcoming match scheduled for 7:00 PM tonight against their division rivals. Recent form suggests a high-scoring game.`;
+  const team = teams[0];
+  // Functional summary of their specific team
+  return `The ${team} have their next scheduled fixture appearing tonight. Local coverage and stats are synchronized.`;
 }

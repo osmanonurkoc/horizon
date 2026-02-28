@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Card, CardContent } from "@/components/ui/card";
-import { CloudRain, Trophy, TrendingUp, Calendar, Loader2, AlertCircle } from "lucide-react";
+import { CloudRain, Trophy, TrendingUp, Calendar, Loader2, AlertCircle, Sun } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 
 interface Insight {
@@ -47,11 +47,11 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       setLoading(true);
       const newInsights: Insight[] = [];
 
-      // 1. Weather Insight (Forecast Shifts)
+      // 1. Weather Event (Rain or Temperature shifts)
       if (config.enabledWidgets.weather && config.location && config.apiKeys.weather) {
         try {
           const forecast = await cachedFetch(
-            `insight_weather_${config.location}`,
+            `insight_weather_event_${config.location}`,
             async () => {
               const url = `https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
               const res = await fetch(url);
@@ -61,21 +61,22 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           );
 
           if (forecast?.list) {
-            const willRain = forecast.list.some((item: any) => item.weather[0].main.toLowerCase().includes('rain'));
-            if (willRain) {
+            const rainItem = forecast.list.find((item: any) => item.weather[0].main.toLowerCase().includes('rain'));
+            if (rainItem) {
+              const rainTime = new Date(rainItem.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               newInsights.push({
                 type: 'weather',
-                title: 'Rain Alert',
-                message: `Precipitation detected in the 24-hour forecast for ${config.location}.`,
+                title: 'Weather Shift',
+                message: `Rain expected to begin around ${rainTime} in ${config.location}.`,
                 icon: CloudRain,
                 color: 'blue'
               });
             } else {
               newInsights.push({
                 type: 'weather',
-                title: 'Sky Watch',
-                message: `Skies over ${config.location} expected to remain clear.`,
-                icon: Calendar,
+                title: 'Clear Skies',
+                message: `Conditions remain favorable for outdoor activities in ${config.location}.`,
+                icon: Sun,
                 color: 'blue'
               });
             }
@@ -83,31 +84,35 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         } catch (e) {}
       }
 
-      // 2. Sports Insight (Next Match)
+      // 2. Sports Insight (STRICTLY for Followed Teams)
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0) {
         try {
-          const teamName = config.sportsTeams[0];
-          const sportInsight = await cachedFetch(
-            `insight_sports_${teamName.replace(/\s+/g, '_')}`,
-            async () => {
-              const search = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
-              if (!search?.teams?.[0]) return null;
-              
-              const teamId = search.teams[0].idTeam;
-              const next = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${teamId}`);
-              return next?.events?.[0] || null;
-            },
-            EXPIRY_TIMES.WEATHER
-          );
+          // Check all followed teams for the next match
+          for (const teamName of config.sportsTeams.slice(0, 2)) {
+            const sportInsight = await cachedFetch(
+              `insight_sports_event_${teamName.replace(/\s+/g, '_')}`,
+              async () => {
+                const search = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
+                if (!search?.teams?.[0]) return null;
+                
+                const teamId = search.teams[0].idTeam;
+                const next = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${teamId}`);
+                return next?.events?.[0] || null;
+              },
+              EXPIRY_TIMES.WEATHER
+            );
 
-          if (sportInsight) {
-            newInsights.push({
-              type: 'sports',
-              title: 'Upcoming Match',
-              message: `${sportInsight.strEvent} scheduled for ${sportInsight.dateEvent} at ${sportInsight.strTime || 'TBD'}.`,
-              icon: Trophy,
-              color: 'red'
-            });
+            if (sportInsight) {
+              newInsights.push({
+                type: 'sports',
+                title: 'Next Match',
+                message: `${sportInsight.strEvent} on ${sportInsight.dateEvent} at ${sportInsight.strTime || 'TBD'}.`,
+                icon: Trophy,
+                color: 'red'
+              });
+              // Only show the first available match to keep it brief
+              break;
+            }
           }
         } catch (e) {}
       }
@@ -117,7 +122,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         try {
           const symbol = config.stocks[0].split(' ')[0];
           const marketInsight = await cachedFetch(
-            `insight_market_${symbol}`,
+            `insight_market_pulse_${symbol}`,
             async () => {
               const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
               return await robustProxyFetch(url);
@@ -133,8 +138,8 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             
             newInsights.push({
               type: 'market',
-              title: 'Portfolio Pulse',
-              message: `${symbol} is trending ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% in the current session.`,
+              title: 'Portfolio Trend',
+              message: `${symbol} is currently ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% in this session.`,
               icon: TrendingUp,
               color: 'emerald'
             });
@@ -153,7 +158,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
     return (
       <div className="flex gap-4 justify-center items-center py-4">
         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Synchronizing Insights...</span>
+        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Synthesizing Briefing...</span>
       </div>
     );
   }
@@ -161,7 +166,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   if (insights.length === 0) return null;
 
   return (
-    <div className="flex gap-6 justify-center overflow-x-auto pb-6 scrollbar-hide no-scrollbar w-full">
+    <div className="flex gap-6 justify-center overflow-x-auto pb-6 scrollbar-hide no-scrollbar w-full px-6">
       {insights.map((insight, idx) => {
         const Icon = insight.icon;
         const colorClass = 
@@ -182,7 +187,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest mb-0.5 opacity-80">{insight.title}</p>
-                <p className="text-sm font-bold text-foreground/80 leading-snug truncate-2-lines">{insight.message}</p>
+                <p className="text-sm font-bold text-foreground/80 leading-snug line-clamp-2">{insight.message}</p>
               </div>
             </CardContent>
           </Card>
