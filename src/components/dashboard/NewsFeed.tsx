@@ -32,17 +32,14 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     setError(null);
 
     try {
-      const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : '';
+      const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
       const lang = config.newsLanguages[0] || 'en';
-      const endpoint = q ? 'search' : 'top-headlines';
       
-      // GNews API usage
+      // GNews API usage - strictly search endpoint with default q to avoid 400 errors
       const result = await cachedFetch(
-        `gnews_v2_${encodeURIComponent(q || 'top')}_${lang}_${config.apiKeys.news.slice(-4)}`,
+        `gnews_v3_${encodeURIComponent(q)}_${lang}_${config.apiKeys.news.slice(-4)}`,
         async () => {
-          const baseUrl = `https://gnews.io/api/v4/${endpoint}`;
-          const queryParam = endpoint === 'search' ? `q=${encodeURIComponent(q)}` : 'category=general';
-          const url = `${baseUrl}?${queryParam}&lang=${lang}&max=12&apikey=${config.apiKeys.news}`;
+          const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=${lang}&max=12&apikey=${config.apiKeys.news}`;
           
           const res = await fetch(url, { mode: 'cors' });
           const json = await res.json();
@@ -61,7 +58,6 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       
       if (result) setArticles(result);
     } catch (err: any) {
-      // We don't console.error as per guidelines, let the UI handle it
       setError(err.message || "Deep Dive interrupted by a network glitch.");
     } finally {
       setLoading(false);
