@@ -135,14 +135,14 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
   return (
     <div className="space-y-12">
       {/* Masonry Grid Implementation with improved spacing */}
-      <div className="columns-1 md:columns-2 lg:columns-3 gap-8 space-y-0">
+      <div className="columns-1 md:columns-2 lg:columns-3 gap-12">
         {articles.map((article, idx) => (
           <a 
             key={`${article.url}-${idx}`} 
             href={article.url} 
             target="_blank" 
             rel="noopener noreferrer" 
-            className="block group break-inside-avoid mb-8"
+            className="block group break-inside-avoid mb-12"
           >
             <Card className="rounded-3xl-card overflow-hidden bg-card border-none shadow-sm hover:shadow-xl transition-all duration-500">
               {article.image && (
@@ -182,7 +182,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         ))}
         
         {loading && Array.from({ length: 3 }).map((_, i) => (
-          <div key={`skeleton-${i}`} className="h-64 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-8" />
+          <div key={`skeleton-${i}`} className="h-64 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-12" />
         ))}
       </div>
       
