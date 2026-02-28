@@ -87,9 +87,11 @@ export function convertConfigToBriefingInput(config: DiscoverConfig): Personaliz
       weather: config.enabledWidgets.weather,
       market: config.enabledWidgets.market,
       newsFeed: config.enabledWidgets.newsFeed,
+      sports: config.enabledWidgets.sports,
     },
     location: config.location,
     newsTopics: config.newsTopics,
     stocks: config.stocks,
+    sportsTeams: config.sportsTeams,
   };
 }
