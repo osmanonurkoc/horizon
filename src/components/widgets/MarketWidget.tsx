@@ -3,12 +3,13 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, BarChart3, ArrowRight, Activity, AlertCircle, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, ArrowRight, Activity, AlertCircle, Loader2, RefreshCcw } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface StockData {
   symbol: string;
@@ -20,6 +21,31 @@ interface StockData {
 interface HistoricalData {
   date: string;
   price: number;
+}
+
+/**
+ * Robust fetcher that tries multiple proxies for Yahoo Finance.
+ */
+async function fetchYahooProxy(targetUrl: string) {
+  const encodedUrl = encodeURIComponent(targetUrl);
+  
+  // Strategy 1: AllOrigins (Raw)
+  try {
+    const res = await fetch(`https://api.allorigins.win/raw?url=${encodedUrl}`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Market Proxy 1 (AllOrigins) failed, attempting fallback...");
+  }
+
+  // Strategy 2: CorsProxy.io
+  try {
+    const res = await fetch(`https://corsproxy.io/?${encodedUrl}`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.error("Market Proxy 2 (CorsProxy) failed.");
+  }
+  
+  throw new Error("Market Hub Connectivity Lost (403/Timeout)");
 }
 
 export function MarketWidget({ config }: { config: DiscoverConfig }) {
@@ -43,34 +69,26 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     }
   }, [tickerList, selectedSymbol]);
 
-  useEffect(() => {
-    const fetchStocks = async () => {
-      if (tickerList.length === 0) {
-        setLoading(false);
-        return;
-      }
+  const fetchStocks = useCallback(async () => {
+    if (tickerList.length === 0) {
+      setLoading(false);
+      return;
+    }
 
-      setError(null);
-      setLoading(true);
+    setError(null);
+    setLoading(true);
 
-      try {
-        const quoteResults = await Promise.all(
-          tickerList.map(async (symbol) => {
-            return cachedFetch(
-              `yahoo_v8_quote_${symbol}`,
+    try {
+      const quoteResults = await Promise.all(
+        tickerList.map(async (symbol) => {
+          try {
+            return await cachedFetch(
+              `yahoo_v10_quote_${symbol}`,
               async () => {
-                // Using v8 chart endpoint for both quote and chart as it's more stable via proxy
-                const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-                const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+                const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+                const json = await fetchYahooProxy(targetUrl);
                 
-                if (!res.ok) {
-                  if (res.status === 403) throw new Error("Access Denied (403)");
-                  throw new Error(`Market Offline (${res.status})`);
-                }
-                
-                const json = await res.json();
                 const meta = json.chart?.result?.[0]?.meta;
-                
                 if (!meta) return null;
 
                 const currentPrice = meta.regularMarketPrice || 0;
@@ -87,71 +105,74 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               },
               EXPIRY_TIMES.MARKET
             );
-          })
-        );
-        
-        setStocks(quoteResults.filter((s): s is StockData => s !== null));
-        setError(null);
-      } catch (err: any) {
-        console.error("Quotes fetch error:", err);
-        setError(err.message || "Market synchronization failed.");
-      } finally {
-        setLoading(false);
+          } catch (e) {
+            console.warn(`Failed to fetch ${symbol}:`, e);
+            return null;
+          }
+        })
+      );
+      
+      const validStocks = quoteResults.filter((s): s is StockData => s !== null);
+      if (validStocks.length === 0 && tickerList.length > 0) {
+        setError("Market synchronization failed (403).");
+      } else {
+        setStocks(validStocks);
       }
-    };
-
-    fetchStocks();
+    } catch (err: any) {
+      setError("Unable to reach Market Hub.");
+    } finally {
+      setLoading(false);
+    }
   }, [tickerList]);
 
   useEffect(() => {
+    fetchStocks();
+  }, [fetchStocks]);
+
+  const fetchHistory = useCallback(async () => {
     if (!selectedSymbol || !isModalOpen) return;
 
-    const fetchHistory = async () => {
-      setHistLoading(true);
-      setHistError(null);
-      setHistoricalData([]);
+    setHistLoading(true);
+    setHistError(null);
+    setHistoricalData([]);
+    
+    try {
+      const data = await cachedFetch(
+        `yahoo_v10_hist_${selectedSymbol}`,
+        async () => {
+          const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1mo`;
+          const json = await fetchYahooProxy(targetUrl);
+          
+          const result = json.chart?.result?.[0];
+          if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) {
+            throw new Error("No trend signals found.");
+          }
+
+          const timestamps = result.timestamp;
+          const prices = result.indicators.quote[0].close;
+
+          return timestamps.map((ts: number, i: number) => {
+            if (prices[i] === null || prices[i] === undefined) return null;
+            return {
+              date: new Date(ts * 1000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }),
+              price: parseFloat(prices[i].toFixed(2))
+            };
+          }).filter((item: any) => item !== null);
+        },
+        EXPIRY_TIMES.MARKET
+      );
       
-      try {
-        const data = await cachedFetch(
-          `yahoo_v8_hist_${selectedSymbol}`,
-          async () => {
-            const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(selectedSymbol)}?interval=1d&range=1mo`;
-            const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-            
-            if (!res.ok) throw new Error(`Chart Access Denied (${res.status})`);
-
-            const json = await res.json();
-            const result = json.chart?.result?.[0];
-            
-            if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) {
-              throw new Error("No trend signals found.");
-            }
-
-            const timestamps = result.timestamp;
-            const prices = result.indicators.quote[0].close;
-
-            return timestamps.map((ts: number, i: number) => {
-              if (prices[i] === null || prices[i] === undefined) return null;
-              return {
-                date: new Date(ts * 1000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }),
-                price: parseFloat(prices[i].toFixed(2))
-              };
-            }).filter((item: any) => item !== null);
-          },
-          EXPIRY_TIMES.MARKET
-        );
-        
-        setHistoricalData(data);
-      } catch (err: any) {
-        console.error("History fetch error:", err);
-        setHistError(err.message || "Unable to sync historical trends.");
-      } finally {
-        setHistLoading(false);
-      }
-    };
-
-    fetchHistory();
+      setHistoricalData(data);
+    } catch (err: any) {
+      setHistError(err.message || "Unable to sync historical trends.");
+    } finally {
+      setHistLoading(false);
+    }
   }, [selectedSymbol, isModalOpen]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const handleSymbolSelect = (symbol: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -173,6 +194,24 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
 
   if (loading) return <div className="h-48 rounded-3xl-card animate-skeleton bg-muted/40" />;
 
+  if (error && stocks.length === 0) {
+    return (
+      <Card className="rounded-3xl-card border-none bg-destructive/5 text-center p-8">
+        <AlertCircle className="w-10 h-10 text-destructive/50 mx-auto mb-3" />
+        <h4 className="text-sm font-black uppercase tracking-widest text-destructive/80 mb-2">Market Link Offline</h4>
+        <p className="text-xs text-muted-foreground mb-6">{error}</p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => fetchStocks()}
+          className="rounded-full gap-2 border-destructive/20"
+        >
+          <RefreshCcw className="w-3 h-3" /> Retry Connection
+        </Button>
+      </Card>
+    );
+  }
+
   return (
     <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
       <DialogTrigger asChild>
@@ -184,7 +223,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            {stocks.length > 0 ? stocks.map((stock, idx) => (
+            {stocks.map((stock, idx) => (
               <div key={`${stock.symbol}-${idx}`} className="flex items-center justify-between group/item">
                 <div>
                   <p className="font-black text-xl font-headline group-hover/item:text-primary transition-colors">{stock.symbol}</p>
@@ -202,12 +241,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                   </p>
                 </div>
               </div>
-            )) : (
-              <div className="py-10 text-center space-y-2">
-                <AlertCircle className="w-8 h-8 mx-auto text-destructive/50" />
-                <p className="text-sm font-bold text-muted-foreground">{error || "No active signals."}</p>
-              </div>
-            )}
+            ))}
           </CardContent>
         </Card>
       </DialogTrigger>
@@ -321,7 +355,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               </div>
               <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 transition-colors hover:bg-secondary/10">
                 <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Provider</p>
-                <p className="font-bold text-foreground/90 text-sm">Yahoo Finance Proxy</p>
+                <p className="font-bold text-foreground/90 text-sm">Yahoo Finance Hub</p>
               </div>
             </div>
           </div>
