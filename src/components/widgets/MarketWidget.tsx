@@ -57,16 +57,19 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
 
       try {
         const symbols = tickerList.join(',');
-        const targetUrl = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
+        const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
         
         const data = await cachedFetch(
-          `yahoo_quotes_v2_${symbols.replace(/,/g, '_')}`,
+          `yahoo_quotes_v3_${symbols.replace(/,/g, '_')}`,
           async () => {
-            // Using encodeURIComponent on the full target URL for the proxy
             const res = await fetch(
-              `https://corsproxy.io/?${encodeURIComponent(targetUrl)}&_=${Date.now()}`
+              `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
             );
-            if (!res.ok) throw new Error(`Market Hub Offline (${res.status})`);
+            
+            if (!res.ok) {
+              if (res.status === 403) throw new Error("Market Hub Access Denied (403)");
+              throw new Error(`Market Hub Offline (${res.status})`);
+            }
             
             const json = await res.json();
             const results = json.quoteResponse?.result || [];
@@ -85,7 +88,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         setError(null);
       } catch (err: any) {
         console.error("Quotes fetch error:", err);
-        setError("Unable to load market data. Please try again later.");
+        setError(err.message || "Unable to load market data.");
       } finally {
         setLoading(false);
       }
@@ -105,21 +108,21 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       
       try {
         const data = await cachedFetch(
-          `yahoo_chart_v2_${selectedSymbol}`,
+          `yahoo_chart_v3_${selectedSymbol}`,
           async () => {
-            const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(selectedSymbol)}?interval=1d&range=1mo`;
-            const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}&_=${Date.now()}`);
+            const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(selectedSymbol)}?interval=1d&range=1mo`;
+            const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
             
-            if (res.status === 403) {
-              throw new Error("This symbol requires a premium data license.");
+            if (!res.ok) {
+              if (res.status === 403) throw new Error("Chart Stream Access Denied (403)");
+              throw new Error(`History Stream Offline (${res.status})`);
             }
-            if (!res.ok) throw new Error(`History Stream Offline (${res.status})`);
 
             const json = await res.json();
             const result = json.chart?.result?.[0];
             
             if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) {
-              throw new Error("No historical records found for this period.");
+              throw new Error("No historical records found.");
             }
 
             const timestamps = result.timestamp;
@@ -139,7 +142,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         setHistoricalData(data);
       } catch (err: any) {
         console.error("History fetch error:", err);
-        setHistError(err.message || "Unable to sync historical trends.");
+        setHistError(err.message || "Unable to sync trends.");
       } finally {
         setHistLoading(false);
       }
@@ -247,7 +250,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                   <DialogDescription className="text-muted-foreground">
                     {selectedSymbol 
                       ? `30-Day performance history for ${selectedSymbol}.` 
-                      : "Detailed historical stock performance trends."}
+                      : "Detailed historical stock performance trends from Yahoo Finance."}
                   </DialogDescription>
                 </div>
                 {histLoading && <Loader2 className="w-6 h-6 animate-spin text-primary" />}
@@ -291,12 +294,23 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 </ResponsiveContainer>
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-12 bg-muted/5 rounded-3xl border border-dashed">
-                  <AlertCircle className="w-12 h-12 text-destructive mb-4 opacity-40" />
-                  <p className="text-lg font-bold text-foreground/80 leading-tight">
-                    {histError || "Awaiting real-time insights..."}
-                  </p>
+                  {histError ? (
+                    <>
+                      <AlertCircle className="w-12 h-12 text-destructive mb-4 opacity-40" />
+                      <p className="text-lg font-bold text-foreground/80 leading-tight">
+                        {histError}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="w-12 h-12 text-primary/40 mb-4 animate-spin" />
+                      <p className="text-lg font-bold text-foreground/80 leading-tight">
+                        Awaiting Market Signals...
+                      </p>
+                    </>
+                  )}
                   <p className="text-xs text-muted-foreground mt-4 max-w-sm">
-                    Data provided by Yahoo Finance Hub.
+                    Global Market Stream provided via Yahoo Finance.
                   </p>
                 </div>
               )}

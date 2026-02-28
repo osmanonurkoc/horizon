@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -42,7 +43,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v12_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          `gnews_v13_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
           async () => {
             return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
           },
@@ -89,7 +90,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     fetchNews(1, true);
   }, [fetchNews]);
 
-  // Infinite scroll trigger
+  // Infinite scroll trigger via effect to avoid setState-in-render
   useEffect(() => {
     if (page > 1) {
       fetchNews(page);
@@ -99,7 +100,6 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
-        // Only trigger if visible, not already loading, and we have more to fetch
         if (entries[0].isIntersecting && hasMore && !loading && articles.length > 0) {
           setPage(prev => prev + 1);
         }
@@ -141,7 +141,6 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="space-y-12">
-      {/* Dense Masonry Grid with significant spacing */}
       <div className="columns-1 md:columns-2 lg:columns-3 gap-12">
         {articles.map((article, idx) => (
           <a 
@@ -189,7 +188,6 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         ))}
       </div>
       
-      {/* Scroll Loader */}
       <div ref={observerTarget} className="h-40 flex flex-col items-center justify-center">
         {loading && articles.length > 0 && (
           <div className="flex flex-col items-center gap-4 text-primary">
