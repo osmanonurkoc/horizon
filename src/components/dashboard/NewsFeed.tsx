@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -43,7 +42,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v10_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          `gnews_v11_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
           async () => {
             return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
           },
@@ -69,7 +68,11 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
             new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
           );
         });
-        if (combinedArticles.length < (languages.length * 10)) setHasMore(false);
+        
+        // If combined articles is significantly low, we might be at the end
+        if (combinedArticles.length < (languages.length * 5)) {
+          setHasMore(false);
+        }
       }
     } catch (err: any) {
       setError(err.message || "Deep Dive interrupted by a network glitch.");
@@ -96,6 +99,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
+        // Only trigger if visible, not already loading, and we have more to fetch
         if (entries[0].isIntersecting && hasMore && !loading && articles.length > 0) {
           setPage(prev => prev + 1);
         }

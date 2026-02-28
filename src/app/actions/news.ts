@@ -10,14 +10,13 @@ export async function fetchGNewsAction(q: string, lang: string, page: number, ap
   const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=${language}&page=${page}&max=12&apikey=${apiKey}`;
   
   try {
-    const res = await fetch(url, { 
-      next: { revalidate: 3600 } // Cache on server for 1 hour
-    });
+    // We remove server-side caching to ensure the client-side refresh logic 
+    // and config changes are always respected immediately.
+    const res = await fetch(url, { cache: 'no-store' });
     
     const json = await res.json();
 
     if (!res.ok) {
-      // GNews returns an errors array
       const msg = json.errors ? json.errors[0] : `GNews API Error (Status ${res.status})`;
       throw new Error(msg);
     }

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -49,9 +48,9 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
   );
 
   useEffect(() => {
-    // Reset states and clear demo flag when configuration changes to force live retry
-    setIsDemo(false);
+    // Reset all states when config changes to ensure a clean live retry
     setError(null);
+    setIsDemo(false);
     setLoading(true);
 
     if (!config.apiKeys.market || tickerList.length === 0) {
@@ -63,10 +62,10 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       try {
         const results = await Promise.all(
           tickerList.map(async (ticker) => {
-            // Key busting using hash of current API key
-            const apiKeyHash = config.apiKeys.market.slice(-4);
+            // Include full API key (partially) in cache key to force bust on key change
+            const apiKeySignature = config.apiKeys.market.slice(-8);
             return cachedFetch(
-              `stock_v10_${ticker}_${apiKeyHash}`,
+              `stock_v11_${ticker}_${apiKeySignature}`,
               async () => {
                 const res = await fetch(
                   `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${config.apiKeys.market}`
@@ -94,6 +93,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               EXPIRY_TIMES.MARKET
             ).catch(err => {
               if (err.message === "API Limit Reached") throw err;
+              if (err.message === "Invalid API Key") throw err;
               return null;
             });
           })
@@ -102,7 +102,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         const validStocks = results.filter((s): s is StockData => s !== null);
         
         if (validStocks.length === 0) {
-          setError("Daily Limit Reached - Demo Active");
+          setError("Data Stream Limited - Demo Active");
           setStocks(DEMO_STOCKS);
           setIsDemo(true);
         } else {
@@ -111,7 +111,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           setError(null);
         }
       } catch (err: any) {
-        setError(err.message === "API Limit Reached" ? "Limit Reached - Demo Mode" : "Market Data Unavailable");
+        setError(err.message || "Market Data Unavailable");
         setStocks(DEMO_STOCKS);
         setIsDemo(true);
       } finally {
@@ -120,8 +120,9 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     };
 
     fetchStocks();
-    if (tickerList.length > 0) setSelectedSymbol(tickerList[0]);
-    else setSelectedSymbol("AAPL");
+    if (tickerList.length > 0 && !selectedSymbol) {
+      setSelectedSymbol(tickerList[0]);
+    }
   }, [config.apiKeys.market, tickerList]);
 
   useEffect(() => {
@@ -136,9 +137,9 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       setHistLoading(true);
       setHistError(null);
       try {
-        const apiKeyHash = config.apiKeys.market.slice(-4);
+        const apiKeySignature = config.apiKeys.market.slice(-8);
         const data = await cachedFetch(
-          `stock_hist_v5_${selectedSymbol}_${apiKeyHash}`,
+          `stock_hist_v6_${selectedSymbol}_${apiKeySignature}`,
           async () => {
             const res = await fetch(
               `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${selectedSymbol}&apikey=${config.apiKeys.market}`
@@ -162,7 +163,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         );
         setHistoricalData(data);
       } catch (err: any) {
-        setHistError("History Limit Reached");
+        setHistError("History Stream Unavailable");
         setHistoricalData(DEMO_HISTORY);
       } finally {
         setHistLoading(false);
@@ -178,7 +179,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         <CardContent className="flex flex-col items-center justify-center h-48 text-muted-foreground p-6 text-center">
           <BarChart3 className="w-12 h-12 mb-2 opacity-30" />
           <p className="font-medium">Market Setup Required</p>
-          <p className="text-xs">Add tickers in settings.</p>
+          <p className="text-xs">Add tickers and API key in settings.</p>
         </CardContent>
       </Card>
     );
@@ -202,16 +203,16 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 <div>
                   <p className="font-black text-xl font-headline group-hover/item:text-primary transition-colors">{stock.symbol}</p>
                   <p className="text-sm font-bold">
-                    ${(stock.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    ${(stock.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <div className={`flex flex-col items-end ${(stock.change ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <div className={`flex flex-col items-end ${(stock.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   <div className="flex items-center gap-1 font-bold">
-                    {(stock.change ?? 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    {(stock.change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                     {stock.changePercent}
                   </div>
                   <p className="text-[10px] font-bold opacity-60">
-                    {(stock.change ?? 0) >= 0 ? '+' : ''}{(stock.change ?? 0).toFixed(2)}
+                    {(stock.change || 0) >= 0 ? '+' : ''}{(stock.change || 0).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -245,7 +246,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                   <span className={cn(
                     "text-[10px] font-black",
                     selectedSymbol === stock.symbol ? "text-white/80" : "text-muted-foreground"
-                  )}>${stock.price.toFixed(2)}</span>
+                  )}>${(stock.price || 0).toFixed(2)}</span>
                 </button>
               ))}
             </div>
