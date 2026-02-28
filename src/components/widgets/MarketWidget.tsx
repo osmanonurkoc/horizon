@@ -56,7 +56,6 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     const fetchStocks = async () => {
       setLoading(true);
       setError(null);
-      setIsDemo(false);
       
       try {
         const results = await Promise.all(
@@ -69,7 +68,6 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 );
                 const json = await res.json();
                 
-                // Alpha Vantage specific error fields
                 if (json.Note || json.Information || json["Error Message"]) {
                   throw new Error("API Limit Reached");
                 }
@@ -99,6 +97,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           setIsDemo(true);
         } else {
           setStocks(validStocks);
+          setIsDemo(false);
         }
       } catch (err: any) {
         setError("API Limit Reached - Demo Mode Active");
@@ -112,7 +111,8 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     fetchStocks();
     if (tickerList.length > 0) setSelectedSymbol(tickerList[0]);
     else if (isDemo) setSelectedSymbol(DEMO_STOCKS[0].symbol);
-  }, [config, tickerList, isDemo]);
+    // Removed isDemo from dependencies to prevent infinite loop during state updates
+  }, [config.apiKeys.market, tickerList]);
 
   useEffect(() => {
     if (!selectedSymbol || !config.apiKeys.market || isDemo) {
