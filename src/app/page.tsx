@@ -12,12 +12,18 @@ export default function Home() {
 
   useEffect(() => {
     const stored = getConfig();
-    // A simplified check to see if onboarding was completed
-    // If they have no API keys and no bookmarks, it's likely first run
+    
+    // Simple check to see if onboarding was completed
     const hasBeenConfigured = stored.apiKeys.weather || stored.apiKeys.news || stored.bookmarks.length > 0;
     
     if (hasBeenConfigured) {
       setConfig(stored);
+      // Requirement 2: Apply initial theme
+      if (stored.theme === 'mocha') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
     }
     setIsReady(true);
   }, []);

@@ -1,6 +1,7 @@
 "use client";
 
-import { type DiscoverConfig } from "@/lib/config-store";
+import { useState, useEffect } from "react";
+import { type DiscoverConfig, saveConfig } from "@/lib/config-store";
 import { ClockSection } from "./ClockSection";
 import { SmartNotifications } from "./SmartNotifications";
 import { WeatherWidget } from "@/components/widgets/WeatherWidget";
@@ -10,9 +11,19 @@ import { BookmarksWidget } from "@/components/widgets/BookmarksWidget";
 import { SportsWidget } from "@/components/widgets/SportsWidget";
 import { NewsFeed } from "./NewsFeed";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, Moon, Sun } from "lucide-react";
 
 export default function Dashboard({ config, onOpenSettings }: { config: DiscoverConfig, onOpenSettings: () => void }) {
+  const [currentTheme, setCurrentTheme] = useState(config.theme);
+
+  // Requirement 2: Theme Switcher
+  const toggleTheme = () => {
+    const newTheme = currentTheme === 'latte' ? 'mocha' : 'latte';
+    setCurrentTheme(newTheme);
+    const updatedConfig = { ...config, theme: newTheme };
+    saveConfig(updatedConfig);
+  };
+
   const renderWidget = (name: string) => {
     if (!config.enabledWidgets[name as keyof DiscoverConfig['enabledWidgets']]) return null;
 
@@ -27,8 +38,19 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 selection:bg-primary/30">
-      <div className="fixed top-6 right-6 z-50">
+    <div className="min-h-screen bg-background pb-20 selection:bg-primary/30 transition-colors duration-500">
+      {/* Header Utilities */}
+      <div className="fixed top-6 right-6 z-50 flex gap-3">
+        {/* Requirement 2: Sun/Moon Theme Toggle */}
+        <Button 
+          variant="outline" 
+          size="icon" 
+          onClick={toggleTheme}
+          className="rounded-full h-12 w-12 bg-card/80 backdrop-blur shadow-lg border-none transition-all duration-300 hover:scale-110 active:scale-95"
+        >
+          {currentTheme === 'latte' ? <Moon className="w-6 h-6" /> : <Sun className="w-6 h-6" />}
+        </Button>
+
         <Button 
           variant="outline" 
           size="icon" 
@@ -46,6 +68,7 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
           <SmartNotifications config={config} />
         </div>
 
+        {/* Respecting widgetOrder precisely */}
         <div className={`px-6 grid gap-6 ${config.layout === 'double' ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {config.widgetOrder.map(renderWidget)}
         </div>

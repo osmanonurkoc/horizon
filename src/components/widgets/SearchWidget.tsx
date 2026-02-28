@@ -12,7 +12,8 @@ export function SearchWidget({ config }: { config: DiscoverConfig }) {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-    window.location.href = `${config.searchEngine}${encodeURIComponent(query)}`;
+    // Requirement 4: Use preferred search engine
+    window.open(`${config.searchEngine}${encodeURIComponent(query)}`, '_blank');
   };
 
   return (
@@ -22,7 +23,7 @@ export function SearchWidget({ config }: { config: DiscoverConfig }) {
           <Input 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search the horizon..."
+            placeholder="Explore the horizon..."
             className="h-16 pl-14 pr-6 rounded-2xl bg-white/20 border-none text-white placeholder:text-white/60 text-lg focus-visible:ring-offset-0 focus-visible:ring-2 focus-visible:ring-white/50 transition-all"
           />
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-white/80" />

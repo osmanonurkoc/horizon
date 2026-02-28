@@ -26,6 +26,12 @@ export interface DiscoverConfig {
   widgetOrder: string[];
 }
 
+export const SEARCH_ENGINES = [
+  { name: 'Google', url: 'https://www.google.com/search?q=' },
+  { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
+  { name: 'Bing', url: 'https://www.bing.com/search?q=' },
+];
+
 export const DEFAULT_CONFIG: DiscoverConfig = {
   theme: 'latte',
   layout: 'double',
@@ -68,6 +74,13 @@ export function getConfig(): DiscoverConfig {
 export function saveConfig(config: DiscoverConfig) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  
+  // Apply theme class globally
+  if (config.theme === 'mocha') {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
 }
 
 export function convertConfigToBriefingInput(config: DiscoverConfig): PersonalizedBriefingInput {
