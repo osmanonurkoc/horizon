@@ -39,7 +39,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             </CardContent>
           </Card>
 
-          <Card className="flex-none w-[350px] rounded-2xl border-none bg-secondary/10 border-l-4 border-l-secondary shadow-sm group hover:bg-secondary/15 transition-all">
+          <Card className="flex-none w-[350px] rounded-2xl border-none bg-card border-l-4 border-l-secondary shadow-sm group hover:bg-secondary/5 transition-all">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="p-2 bg-secondary rounded-xl text-white">
                 <Clock className="w-6 h-6" />
