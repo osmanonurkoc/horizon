@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Cloud, Sun, CloudRain, Thermometer, Wind, Droplets, ArrowRight } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import { type DiscoverConfig } from "@/lib/config-store";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 
 interface WeatherData {
   temp: number;
@@ -118,6 +118,9 @@ export function WeatherWidget({ config }: { config: DiscoverConfig }) {
       <DialogContent className="rounded-3xl border-none max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline font-bold">5-Day Outlook: {data?.city}</DialogTitle>
+          <DialogDescription>
+            Long-range weather forecasts and conditions for your current location.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-6">
           <div className="grid grid-cols-5 gap-4">

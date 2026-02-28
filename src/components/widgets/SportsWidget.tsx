@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, ArrowRight, ShieldCheck } from "lucide-react";
 import { type DiscoverConfig } from "@/lib/config-store";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export function SportsWidget({ config }: { config: DiscoverConfig }) {
@@ -62,6 +62,9 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
       <DialogContent className="rounded-3xl border-none max-w-2xl bg-card">
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline font-bold">Club News & Schedule</DialogTitle>
+          <DialogDescription>
+            Live scores, upcoming fixtures, and squad status for your favorite teams.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-6">
           <div className="space-y-4">

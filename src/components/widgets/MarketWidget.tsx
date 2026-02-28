@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, BarChart3, ArrowRight, Activity, AlertCircle } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import { type DiscoverConfig } from "@/lib/config-store";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 
 interface StockData {
   symbol: string;
@@ -33,22 +32,21 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         const results = await Promise.all(
           config.stocks.map(async (symbol) => {
             // Clean symbol from format "AAPL (Apple Inc)" -> "AAPL"
-            const ticker = symbol.split(' ')[0];
+            const ticker = symbol.split(' ')[0].toUpperCase();
             return cachedFetch(
-              `stock_v2_${ticker}_${config.apiKeys.market.slice(-4)}`,
+              `stock_v3_${ticker}_${config.apiKeys.market.slice(-4)}`,
               async () => {
                 const res = await fetch(
                   `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${config.apiKeys.market}`
                 );
                 const json = await res.json();
                 
-                // Alpha Vantage returns "Note" when rate limited (25 requests/day free tier)
-                if (json.Note) {
-                  throw new Error("Rate limit exceeded");
+                if (json.Note || json.Information) {
+                  throw new Error("API Limit Reached");
                 }
 
                 const quote = json["Global Quote"];
-                if (!quote || quote["05. price"] === undefined) {
+                if (!quote || Object.keys(quote).length === 0) {
                   return null;
                 }
 
@@ -61,7 +59,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               },
               EXPIRY_TIMES.MARKET
             ).catch(err => {
-              if (err.message === "Rate limit exceeded") throw err;
+              if (err.message === "API Limit Reached") throw err;
               return null;
             });
           })
@@ -70,10 +68,10 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         const validStocks = results.filter((s): s is StockData => s !== null);
         setStocks(validStocks);
         if (validStocks.length === 0 && config.stocks.length > 0) {
-          setError("No data found for symbols");
+          setError("No market data found");
         }
       } catch (err: any) {
-        setError(err.message === "Rate limit exceeded" ? "API Daily Limit Reached" : "Market Data Unavailable");
+        setError(err.message === "API Limit Reached" ? "Daily Limit Reached" : "Market Data Unavailable");
       } finally {
         setLoading(false);
       }
@@ -109,7 +107,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               <div className="text-center py-6 flex flex-col items-center gap-2">
                 <AlertCircle className="w-8 h-8 text-destructive opacity-40" />
                 <p className="text-sm font-bold text-muted-foreground italic">{error}</p>
-                <p className="text-[10px] uppercase text-muted-foreground/50">Check Alpha Vantage Quota</p>
+                <p className="text-[10px] uppercase text-muted-foreground/50">Alpha Vantage Limit</p>
               </div>
             ) : stocks.length === 0 ? (
               <div className="text-center py-4 text-muted-foreground italic">No data available</div>
@@ -140,6 +138,9 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       <DialogContent className="rounded-3xl border-none max-w-2xl bg-card">
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline font-bold">Portfolio Analysis</DialogTitle>
+          <DialogDescription>
+            Detailed market performance and sector analysis for your selected symbols.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
