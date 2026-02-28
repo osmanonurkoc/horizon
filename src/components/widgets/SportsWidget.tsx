@@ -1,13 +1,86 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, ArrowRight, ShieldCheck } from "lucide-react";
+import { Trophy, ArrowRight, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import { cn } from "@/lib/utils";
 
+interface TeamResult {
+  teamName: string;
+  lastScore: string;
+  opponent: string;
+  isLive: boolean;
+  status: string;
+  date: string;
+}
+
 export function SportsWidget({ config }: { config: DiscoverConfig }) {
+  const [results, setResults] = useState<TeamResult[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (config.sportsTeams.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchSportsData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const teamData = await Promise.all(
+          config.sportsTeams.map(async (teamName) => {
+            return cachedFetch(
+              `sports_v3_${teamName.replace(/\s+/g, '_')}`,
+              async () => {
+                // Step 1: Search for Team ID
+                const searchRes = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
+                const searchJson = await searchRes.json();
+                
+                if (!searchJson.teams || searchJson.teams.length === 0) return null;
+                const teamId = searchJson.teams[0].idTeam;
+
+                // Step 2: Fetch Last Events
+                const eventsRes = await fetch(`https://www.thesportsdb.com/api/v1/json/3/eventslast.php?id=${teamId}`);
+                const eventsJson = await eventsRes.json();
+                
+                if (!eventsJson.results || eventsJson.results.length === 0) return null;
+                
+                const lastMatch = eventsJson.results[0];
+                const isHome = lastMatch.idHomeTeam === teamId;
+                const opponent = isHome ? lastMatch.strAwayTeam : lastMatch.strHomeTeam;
+                const score = `${lastMatch.intHomeScore} - ${lastMatch.intAwayScore}`;
+
+                return {
+                  teamName: teamName,
+                  lastScore: score,
+                  opponent: opponent,
+                  isLive: false, // TheSportsDB free tier usually shows past events
+                  status: lastMatch.strStatus || 'FT',
+                  date: lastMatch.dateEvent
+                } as TeamResult;
+              },
+              EXPIRY_TIMES.WEATHER // Using weather expiry for sports (30 mins)
+            );
+          })
+        );
+
+        setResults(teamData.filter((r): r is TeamResult => r !== null));
+      } catch (err: any) {
+        setError("Stadium link unstable.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSportsData();
+  }, [config.sportsTeams]);
+
   if (config.sportsTeams.length === 0) {
     return (
       <Card className="rounded-3xl-card bg-muted/20 border-dashed">
@@ -20,6 +93,8 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     );
   }
 
+  if (loading) return <div className="h-48 rounded-3xl-card animate-skeleton bg-muted/40" />;
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -29,34 +104,37 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
           </CardHeader>
           <CardContent className="p-6 space-y-6">
-            {config.sportsTeams.slice(0, 3).map((team, i) => (
+            {results.length > 0 ? results.slice(0, 3).map((result, i) => (
               <div key={i} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-secondary/10 rounded-2xl flex items-center justify-center text-secondary font-black text-xl">
-                    {team[0]}
+                    {result.teamName[0]}
                   </div>
                   <div>
-                    <p className="font-black font-headline text-lg group-hover:text-primary transition-colors">{team}</p>
-                    <p className="text-xs text-muted-foreground uppercase font-bold">Main League</p>
+                    <p className="font-black font-headline text-lg group-hover:text-primary transition-colors">{result.teamName}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">vs {result.opponent}</p>
                   </div>
                 </div>
                 
-                {i === 0 ? (
-                  <div className="flex flex-col items-end">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="pulsating-dot" />
-                      <span className="text-[10px] font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-full">LIVE</span>
-                    </div>
-                    <p className="text-xl font-black tabular-nums">2 - 1</p>
+                <div className="flex flex-col items-end">
+                  <div className="flex items-center gap-2 mb-1">
+                    {result.isLive && <div className="pulsating-dot" />}
+                    <span className={cn(
+                      "text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter",
+                      result.isLive ? "text-red-600 bg-red-100" : "text-muted-foreground bg-muted"
+                    )}>
+                      {result.status}
+                    </span>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-end text-right">
-                    <p className="text-sm font-bold">Tomorrow</p>
-                    <p className="text-xs text-muted-foreground">19:45 PM</p>
-                  </div>
-                )}
+                  <p className="text-xl font-black tabular-nums">{result.lastScore}</p>
+                </div>
               </div>
-            ))}
+            )) : (
+              <div className="py-10 text-center space-y-2">
+                <AlertCircle className="w-8 h-8 mx-auto text-destructive/50" />
+                <p className="text-sm font-bold text-muted-foreground">{error || "No recent results found."}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </DialogTrigger>
@@ -68,41 +146,24 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-6">
-          <div className="space-y-4">
-            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground mb-2">Form Guide</h4>
-            <div className="flex gap-2">
-              {['W', 'W', 'D', 'W', 'L'].map((res, i) => (
-                <div key={i} className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-sm",
-                  res === 'W' ? 'bg-green-500' : res === 'D' ? 'bg-orange-400' : 'bg-red-500'
-                )}>
-                  {res}
-                </div>
-              ))}
-            </div>
-          </div>
           <div className="p-6 bg-secondary/5 rounded-3xl border border-secondary/10 space-y-4">
-            <h4 className="font-bold flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-secondary" /> Squad Status</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-sm">
-                <span className="block font-bold">Injuries</span>
-                <span className="text-muted-foreground text-xs">2 Key players out</span>
-              </div>
-              <div className="text-sm">
-                <span className="block font-bold">Discipline</span>
-                <span className="text-muted-foreground text-xs">No active bans</span>
-              </div>
-            </div>
+            <h4 className="font-bold flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-secondary" /> Data Integrity</h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Results are synchronized with global sports databases. Free tier updates may experience a 15-30 minute delay from live events.
+            </p>
           </div>
           <div className="space-y-3">
-            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Upcoming Fixtures</h4>
-            {[
-              { opponent: 'Paris SC', date: 'Oct 24, 21:00' },
-              { opponent: 'Berlin Utd', date: 'Oct 28, 15:30' }
-            ].map((fix, idx) => (
+            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Recent Form History</h4>
+            {results.map((res, idx) => (
               <div key={idx} className="flex justify-between items-center p-4 bg-muted/20 rounded-2xl hover:bg-muted/30 transition-colors">
-                <span className="font-bold">{fix.opponent}</span>
-                <span className="text-[10px] opacity-60 font-bold uppercase">{fix.date}</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-black text-primary">{res.teamName}</span>
+                  <span className="text-xs font-bold text-muted-foreground">vs {res.opponent}</span>
+                </div>
+                <div className="text-right">
+                  <span className="block font-black text-lg">{res.lastScore}</span>
+                  <span className="text-[10px] opacity-60 font-bold uppercase">{res.date}</span>
+                </div>
               </div>
             ))}
           </div>
