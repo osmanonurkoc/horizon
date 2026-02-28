@@ -48,28 +48,36 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
   );
 
   useEffect(() => {
+    // Reset states when configuration changes to allow fresh attempts
+    setIsDemo(false);
+    setError(null);
+    setLoading(true);
+
     if (!config.apiKeys.market || tickerList.length === 0) {
       setLoading(false);
       return;
     }
 
     const fetchStocks = async () => {
-      setLoading(true);
-      setError(null);
-      
       try {
         const results = await Promise.all(
           tickerList.map(async (ticker) => {
+            // Cache busting by including API key hash in the key
+            const apiKeyHash = config.apiKeys.market.slice(-4);
             return cachedFetch(
-              `stock_quote_v5_${ticker}_${config.apiKeys.market.slice(-4)}`,
+              `stock_v8_${ticker}_${apiKeyHash}`,
               async () => {
                 const res = await fetch(
                   `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${config.apiKeys.market}`
                 );
                 const json = await res.json();
                 
-                if (json.Note || json.Information || json["Error Message"]) {
+                if (json.Note || json.Information) {
                   throw new Error("API Limit Reached");
+                }
+                
+                if (json["Error Message"]) {
+                  throw new Error("Invalid API Key");
                 }
 
                 const quote = json["Global Quote"];
@@ -91,16 +99,18 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         );
         
         const validStocks = results.filter((s): s is StockData => s !== null);
+        
         if (validStocks.length === 0) {
-          setError("API Limit Reached - Demo Mode Active");
+          setError("API Limit Reached - Using Demo Mode");
           setStocks(DEMO_STOCKS);
           setIsDemo(true);
         } else {
           setStocks(validStocks);
           setIsDemo(false);
+          setError(null);
         }
       } catch (err: any) {
-        setError("API Limit Reached - Demo Mode Active");
+        setError(err.message === "API Limit Reached" ? "API Limit Reached - Demo Active" : "Market Data Unavailable");
         setStocks(DEMO_STOCKS);
         setIsDemo(true);
       } finally {
@@ -111,12 +121,13 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     fetchStocks();
     if (tickerList.length > 0) setSelectedSymbol(tickerList[0]);
     else if (isDemo) setSelectedSymbol(DEMO_STOCKS[0].symbol);
-    // Removed isDemo from dependencies to prevent infinite loop during state updates
   }, [config.apiKeys.market, tickerList]);
 
   useEffect(() => {
-    if (!selectedSymbol || !config.apiKeys.market || isDemo) {
-      if (isDemo) setHistoricalData(DEMO_HISTORY);
+    if (!selectedSymbol) return;
+
+    if (isDemo || !config.apiKeys.market) {
+      setHistoricalData(DEMO_HISTORY);
       return;
     }
 
@@ -124,15 +135,16 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       setHistLoading(true);
       setHistError(null);
       try {
+        const apiKeyHash = config.apiKeys.market.slice(-4);
         const data = await cachedFetch(
-          `stock_hist_v1_${selectedSymbol}_${config.apiKeys.market.slice(-4)}`,
+          `stock_hist_v3_${selectedSymbol}_${apiKeyHash}`,
           async () => {
             const res = await fetch(
               `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${selectedSymbol}&apikey=${config.apiKeys.market}`
             );
             const json = await res.json();
             
-            if (json.Note || json.Information || json["Error Message"]) throw new Error("API Limit Reached");
+            if (json.Note || json.Information || json["Error Message"]) throw new Error("API Limit");
             
             const timeSeries = json["Time Series (Daily)"];
             if (!timeSeries) throw new Error("No historical data");
@@ -149,7 +161,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         );
         setHistoricalData(data);
       } catch (err: any) {
-        setHistError("History Unavailable (API Limit)");
+        setHistError("History Limit Reached");
         setHistoricalData(DEMO_HISTORY);
       } finally {
         setHistLoading(false);
@@ -178,7 +190,9 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       <DialogTrigger asChild>
         <Card className="rounded-3xl-card bg-card overflow-hidden cursor-pointer group hover:border-primary/50 transition-all">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Market Watch {isDemo && "(Demo)"}</CardTitle>
+            <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">
+              Market Watch {isDemo && "(Demo)"}
+            </CardTitle>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
           </CardHeader>
           <CardContent className="p-6 space-y-4">
@@ -201,42 +215,48 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 </div>
               </div>
             ))}
-            {isDemo && (
+            {error && (
               <p className="text-[10px] text-center text-muted-foreground italic pt-2">
-                API Daily Limit Reached. Showing demonstration data.
+                {error}
               </p>
             )}
           </CardContent>
         </Card>
       </DialogTrigger>
-      <DialogContent className="rounded-3xl border-none max-w-4xl bg-card p-0 overflow-hidden">
-        <div className="flex h-[550px]">
-          <div className="w-64 bg-muted/20 border-r p-6 space-y-4 overflow-y-auto">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Portfolio</h4>
+      <DialogContent className="rounded-3xl border-none max-w-4xl bg-card p-0 overflow-hidden shadow-2xl">
+        <div className="flex h-[600px]">
+          {/* Sidebar List */}
+          <div className="w-72 bg-muted/10 border-r p-6 space-y-4 overflow-y-auto">
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Your Portfolio</h4>
             <div className="space-y-2">
-              {(isDemo ? DEMO_STOCKS : stocks).map(stock => (
+              {stocks.map(stock => (
                 <button
                   key={stock.symbol}
                   onClick={() => setSelectedSymbol(stock.symbol)}
                   className={cn(
-                    "w-full text-left p-4 rounded-xl transition-all font-bold text-sm",
+                    "w-full text-left p-4 rounded-xl transition-all font-bold text-sm flex justify-between items-center group",
                     selectedSymbol === stock.symbol 
-                      ? "bg-primary text-primary-foreground shadow-lg" 
-                      : "hover:bg-primary/10 bg-card/50"
+                      ? "bg-primary text-primary-foreground shadow-md scale-105" 
+                      : "hover:bg-primary/10 bg-card/40 text-foreground/70"
                   )}
                 >
-                  {stock.symbol}
+                  <span>{stock.symbol}</span>
+                  <span className={cn(
+                    "text-[10px] font-black",
+                    selectedSymbol === stock.symbol ? "text-white/80" : "text-muted-foreground"
+                  )}>${stock.price.toFixed(2)}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="flex-1 p-8 flex flex-col">
-            <DialogHeader className="mb-8">
+          {/* Chart Area */}
+          <div className="flex-1 p-10 flex flex-col bg-card">
+            <DialogHeader className="mb-10">
               <div className="flex items-center justify-between">
                 <div>
-                  <DialogTitle className="text-3xl font-headline font-black">{selectedSymbol}</DialogTitle>
-                  <DialogDescription>30-Day Performance History & Technical Horizon</DialogDescription>
+                  <DialogTitle className="text-4xl font-headline font-black tracking-tight">{selectedSymbol}</DialogTitle>
+                  <DialogDescription className="text-muted-foreground mt-1">30-Day performance history for selected ticker.</DialogDescription>
                 </div>
                 {histLoading && <Loader2 className="w-6 h-6 animate-spin text-primary" />}
               </div>
@@ -246,12 +266,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               {historicalData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historicalData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
                     <XAxis 
                       dataKey="date" 
                       axisLine={false} 
                       tickLine={false} 
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 700 }}
                       dy={10}
                     />
                     <YAxis hide={true} domain={['auto', 'auto']} />
@@ -259,39 +279,43 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                       contentStyle={{ 
                         borderRadius: '1rem', 
                         border: 'none', 
-                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
                         backgroundColor: 'hsl(var(--card))',
-                        color: 'hsl(var(--foreground))'
+                        padding: '12px'
                       }}
+                      itemStyle={{ fontWeight: 800, color: 'hsl(var(--primary))' }}
+                      labelStyle={{ marginBottom: '4px', fontSize: '10px', color: 'hsl(var(--muted-foreground))', fontWeight: 900, textTransform: 'uppercase' }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="price" 
                       stroke="hsl(var(--primary))" 
-                      strokeWidth={4} 
+                      strokeWidth={5} 
                       dot={false}
-                      animationDuration={1000}
+                      activeDot={{ r: 6, strokeWidth: 0, fill: 'hsl(var(--primary))' }}
+                      animationDuration={1500}
                     />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-12 bg-muted/5 rounded-3xl border border-dashed">
                   <AlertCircle className="w-12 h-12 text-destructive mb-4 opacity-40" />
-                  <p className="text-lg font-bold text-muted-foreground">{histError || "Initializing stream..."}</p>
+                  <p className="text-xl font-bold text-foreground/80">{histError || "Awaiting Data Stream..."}</p>
+                  <p className="text-sm text-muted-foreground mt-2 max-w-xs">Historical data retrieval is subject to Alpha Vantage API limits.</p>
                 </div>
               )}
             </div>
             
-            <div className="mt-8 flex gap-4">
-              <div className="flex-1 p-4 bg-primary/5 rounded-2xl border border-primary/10">
-                <p className="text-[10px] font-black uppercase text-primary mb-1">Status</p>
-                <p className="font-bold flex items-center gap-2">
-                  <Activity className="w-4 h-4" /> {isDemo ? "Demo Data" : "Live Market Access"}
+            <div className="mt-10 grid grid-cols-2 gap-6">
+              <div className="p-5 bg-primary/5 rounded-2xl border border-primary/10 transition-colors hover:bg-primary/10">
+                <p className="text-[10px] font-black uppercase text-primary mb-1 tracking-widest">Connectivity</p>
+                <p className="font-bold flex items-center gap-2 text-foreground/90">
+                  <Activity className="w-4 h-4" /> {isDemo ? "Demonstration Logic" : "Authenticated API Stream"}
                 </p>
               </div>
-              <div className="flex-1 p-4 bg-secondary/5 rounded-2xl border border-secondary/10">
-                <p className="text-[10px] font-black uppercase text-secondary mb-1">Analytics</p>
-                <p className="font-bold">Real-time Global Quotes</p>
+              <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 transition-colors hover:bg-secondary/10">
+                <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Data Tier</p>
+                <p className="font-bold text-foreground/90">Standard Global Watcher</p>
               </div>
             </div>
           </div>

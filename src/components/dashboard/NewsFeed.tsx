@@ -40,10 +40,10 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
       const languages = config.newsLanguages.length > 0 ? config.newsLanguages : ['en'];
       
-      // Parallel requests for multi-language support as GNews only supports one lang per request
+      // Multi-language support via parallel requests
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v7_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          `gnews_v9_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
           async () => {
             return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
           },
@@ -55,7 +55,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       const combinedArticles: Article[] = results.flat();
 
       if (combinedArticles.length === 0) {
-        setHasMore(false);
+        if (pageNum === 1) setHasMore(false);
       } else {
         setArticles(prev => {
           const baseArticles = isInitial ? [] : prev;
@@ -69,6 +69,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
             new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
           );
         });
+        if (combinedArticles.length < (languages.length * 10)) setHasMore(false);
       }
     } catch (err: any) {
       setError(err.message || "Deep Dive interrupted by a network glitch.");
@@ -77,13 +78,15 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     }
   }, [config.apiKeys.news, config.newsTopics, config.newsLanguages]);
 
-  // Initial fetch
+  // Initial fetch trigger
   useEffect(() => {
+    setArticles([]);
     setPage(1);
+    setHasMore(true);
     fetchNews(1, true);
   }, [fetchNews]);
 
-  // Handle page changes (Infinite Scroll)
+  // Infinite scroll trigger
   useEffect(() => {
     if (page > 1) {
       fetchNews(page);
@@ -134,7 +137,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="space-y-12">
-      {/* Masonry Grid Implementation with improved spacing */}
+      {/* Dense Masonry Grid with significant spacing */}
       <div className="columns-1 md:columns-2 lg:columns-3 gap-12">
         {articles.map((article, idx) => (
           <a 
@@ -144,25 +147,25 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
             rel="noopener noreferrer" 
             className="block group break-inside-avoid mb-12"
           >
-            <Card className="rounded-3xl-card overflow-hidden bg-card border-none shadow-sm hover:shadow-xl transition-all duration-500">
+            <Card className="rounded-3xl-card overflow-hidden bg-card border-none shadow-sm hover:shadow-2xl transition-all duration-500 hover:-translate-y-2">
               {article.image && (
-                <div className="relative h-48 w-full overflow-hidden bg-muted/20">
+                <div className="relative h-56 w-full overflow-hidden bg-muted/20">
                   <Image 
                     src={article.image} 
                     alt={article.title} 
                     fill 
                     unoptimized={true}
-                    className="object-cover group-hover:scale-105 transition-transform duration-700" 
+                    className="object-cover group-hover:scale-110 transition-transform duration-1000" 
                   />
-                  <div className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-4 right-4 p-2 bg-black/60 backdrop-blur rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
                     <ExternalLink className="w-4 h-4" />
                   </div>
                 </div>
               )}
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-3">
+              <CardContent className="p-8">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full">
                       {article.source.name}
                     </span>
                     <span className="text-[10px] font-bold text-muted-foreground uppercase">
@@ -170,7 +173,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
                     </span>
                   </div>
                 </div>
-                <h4 className="text-lg font-headline font-bold leading-snug group-hover:text-primary transition-colors mb-3">
+                <h4 className="text-xl font-headline font-bold leading-tight group-hover:text-primary transition-colors mb-4">
                   {article.title}
                 </h4>
                 <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
@@ -180,28 +183,27 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
             </Card>
           </a>
         ))}
-        
-        {loading && Array.from({ length: 3 }).map((_, i) => (
-          <div key={`skeleton-${i}`} className="h-64 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-12" />
-        ))}
       </div>
       
-      {/* Scroll Trigger */}
-      <div ref={observerTarget} className="h-20 flex items-center justify-center">
+      {/* Scroll Loader */}
+      <div ref={observerTarget} className="h-40 flex flex-col items-center justify-center">
         {loading && articles.length > 0 && (
-          <div className="flex flex-col items-center gap-2 text-primary">
-            <Loader2 className="w-8 h-8 animate-spin" />
-            <span className="text-xs font-bold uppercase tracking-widest">Loading more global insight...</span>
+          <div className="flex flex-col items-center gap-4 text-primary">
+            <Loader2 className="w-10 h-10 animate-spin" />
+            <span className="text-xs font-black uppercase tracking-[0.2em] opacity-80">Fetching deeper insights...</span>
           </div>
         )}
         {!hasMore && articles.length > 0 && (
-          <p className="text-muted-foreground italic text-sm">You have reached the end of the current horizon.</p>
+          <div className="text-center space-y-2">
+            <div className="h-px w-20 bg-border mx-auto mb-4" />
+            <p className="text-muted-foreground italic text-sm font-medium">You have reached the limit of the current horizon.</p>
+          </div>
         )}
       </div>
 
       {!loading && articles.length === 0 && (
-        <div className="py-20 text-center text-muted-foreground italic">
-          No articles found for your selected topics and languages.
+        <div className="py-20 text-center text-muted-foreground italic font-medium">
+          No signals found for your selected interests.
         </div>
       )}
     </div>
