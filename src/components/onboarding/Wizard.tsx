@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -92,10 +91,11 @@ export default function Wizard({ onComplete }: WizardProps) {
       if (!config.apiKeys.market) return;
       setIsSearching(true);
       try {
-        const res = await fetch(`https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(q)}&apikey=${config.apiKeys.market}`);
+        // Finnhub search endpoint
+        const res = await fetch(`https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${config.apiKeys.market}`);
         const data = await res.json();
-        if (data.bestMatches) {
-          setStockResults(data.bestMatches.map((m: any) => `${m["1. symbol"]} (${m["2. name"]})`));
+        if (data.result) {
+          setLocationResults(data.result.map((m: any) => `${m.symbol} (${m.description})`));
         }
       } catch (err) {
         console.error(err);
@@ -219,7 +219,7 @@ export default function Wizard({ onComplete }: WizardProps) {
                 {[
                   { id: 'weather', label: 'OpenWeather', link: 'https://home.openweathermap.org/users/sign_up', help: 'Get a free key at openweathermap.org', tip: 'Powers local weather updates' },
                   { id: 'news', label: 'GNews API', link: 'https://gnews.io/register', help: 'Get a free key at gnews.io', tip: 'Feeds the masonry-style news stream' },
-                  { id: 'market', label: 'Alpha Vantage', link: 'https://www.alphavantage.co/support/#api-key', help: 'Get a free key at alphavantage.co', tip: 'Provides stock and market watch data' }
+                  { id: 'market', label: 'Finnhub API', link: 'https://finnhub.io/register', help: 'Get a free key at finnhub.io', tip: 'Provides high-frequency stock and market data' }
                 ].map((api) => (
                   <div key={api.id} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -352,14 +352,14 @@ export default function Wizard({ onComplete }: WizardProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {config.enabledWidgets.market && (
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Market Tickers (Global)</Label>
+                    <Label className="text-base font-semibold">Market Tickers (Finnhub)</Label>
                     <AutocompletePillInput 
                       options={stockResults}
                       values={config.stocks}
                       onSearch={fetchStocks}
                       isLoading={isSearching}
                       onChange={(vals) => setConfig(c => ({ ...c, stocks: vals }))}
-                      placeholder={config.apiKeys.market ? "Search stocks..." : "Add Market API Key first"}
+                      placeholder={config.apiKeys.market ? "Search stocks..." : "Add Finnhub API Key first"}
                     />
                   </div>
                 )}

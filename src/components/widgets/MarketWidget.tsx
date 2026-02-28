@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -37,7 +36,6 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
   );
 
   useEffect(() => {
-    // Reset all states when config changes to ensure a clean live retry
     setError(null);
     setLoading(true);
     setStocks([]);
@@ -49,42 +47,30 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
 
     const fetchStocks = async () => {
       try {
+        const apiKey = config.apiKeys.market;
         const results = await Promise.all(
           tickerList.map(async (ticker) => {
-            // Include partially hashed API key in cache key to force bust on key change
-            const apiKeySignature = config.apiKeys.market.slice(-8);
+            const apiKeySignature = apiKey.slice(-8);
             return cachedFetch(
-              `stock_v12_${ticker}_${apiKeySignature}`,
+              `finnhub_quote_v1_${ticker}_${apiKeySignature}`,
               async () => {
                 const res = await fetch(
-                  `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${config.apiKeys.market}`
+                  `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${apiKey}`
                 );
-                const json = await res.json();
+                const data = await res.json();
                 
-                if (json.Note || json.Information) {
-                  throw new Error("API Limit Reached");
-                }
-                
-                if (json["Error Message"]) {
-                  throw new Error("Invalid API Key");
-                }
-
-                const quote = json["Global Quote"];
-                if (!quote || Object.keys(quote).length === 0) return null;
+                if (data.error) throw new Error(data.error);
+                if (data.c === 0 && data.pc === 0) return null; // No data for symbol
 
                 return {
-                  symbol: quote["01. symbol"] || ticker,
-                  price: parseFloat(quote["05. price"]) || 0,
-                  change: parseFloat(quote["09. change"]) || 0,
-                  changePercent: quote["10. change percent"] || "0%",
+                  symbol: ticker,
+                  price: data.c || 0,
+                  change: data.d || 0,
+                  changePercent: `${(data.dp || 0).toFixed(2)}%`,
                 };
               },
               EXPIRY_TIMES.MARKET
-            ).catch(err => {
-              if (err.message === "API Limit Reached") throw err;
-              if (err.message === "Invalid API Key") throw err;
-              return null;
-            });
+            ).catch(() => null);
           })
         );
         
@@ -107,7 +93,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     if (tickerList.length > 0 && !selectedSymbol) {
       setSelectedSymbol(tickerList[0]);
     }
-  }, [config.apiKeys.market, tickerList]);
+  }, [config.apiKeys.market, tickerList, selectedSymbol]);
 
   useEffect(() => {
     if (!selectedSymbol || !config.apiKeys.market) return;
@@ -117,28 +103,26 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       setHistError(null);
       setHistoricalData([]);
       try {
-        const apiKeySignature = config.apiKeys.market.slice(-8);
+        const apiKey = config.apiKeys.market;
+        const apiKeySignature = apiKey.slice(-8);
+        const to = Math.floor(Date.now() / 1000);
+        const from = to - (30 * 24 * 60 * 60);
+
         const data = await cachedFetch(
-          `stock_hist_v7_${selectedSymbol}_${apiKeySignature}`,
+          `finnhub_hist_v1_${selectedSymbol}_${apiKeySignature}`,
           async () => {
             const res = await fetch(
-              `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${selectedSymbol}&apikey=${config.apiKeys.market}`
+              `https://finnhub.io/api/v1/stock/candle?symbol=${selectedSymbol}&resolution=D&from=${from}&to=${to}&token=${apiKey}`
             );
             const json = await res.json();
             
-            if (json.Note || json.Information) throw new Error("API Limit Reached");
-            if (json["Error Message"]) throw new Error("Invalid Request");
-            
-            const timeSeries = json["Time Series (Daily)"];
-            if (!timeSeries) throw new Error("No historical data found");
+            if (json.s === "no_data") throw new Error("No historical data found");
+            if (json.s !== "ok") throw new Error("Invalid Stream Response");
 
-            return Object.entries(timeSeries)
-              .slice(0, 30)
-              .map(([date, values]: [string, any]) => ({
-                date: date.split('-').slice(1).join('/'),
-                price: parseFloat(values["4. close"])
-              }))
-              .reverse();
+            return json.c.map((price: number, i: number) => ({
+              date: new Date(json.t[i] * 1000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }),
+              price: price
+            }));
           },
           EXPIRY_TIMES.MARKET
         );
@@ -159,7 +143,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         <CardContent className="flex flex-col items-center justify-center h-48 text-muted-foreground p-6 text-center">
           <BarChart3 className="w-12 h-12 mb-2 opacity-30" />
           <p className="font-medium">Market Setup Required</p>
-          <p className="text-xs">Add tickers and API key in settings.</p>
+          <p className="text-xs">Add tickers and Finnhub key in settings.</p>
         </CardContent>
       </Card>
     );
@@ -201,11 +185,6 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 <AlertCircle className="w-8 h-8 mx-auto text-destructive/50" />
                 <p className="text-sm font-bold text-muted-foreground">{error || "No real-time signals available."}</p>
               </div>
-            )}
-            {error && stocks.length > 0 && (
-              <p className="text-[10px] text-center text-muted-foreground italic pt-2 border-t border-dashed">
-                Note: {error}
-              </p>
             )}
           </CardContent>
         </Card>
@@ -297,7 +276,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                   <AlertCircle className="w-12 h-12 text-destructive mb-4 opacity-40" />
                   <p className="text-xl font-bold text-foreground/80">{histError || "Awaiting Real Data Stream..."}</p>
                   <p className="text-sm text-muted-foreground mt-2 max-w-xs">
-                    Historical data is pulled directly from the live markets. If no chart is visible, the API limits may have been reached.
+                    Historical data is pulled directly from the live markets via Finnhub.io.
                   </p>
                 </div>
               )}
@@ -307,12 +286,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               <div className="p-5 bg-primary/5 rounded-2xl border border-primary/10 transition-colors hover:bg-primary/10">
                 <p className="text-[10px] font-black uppercase text-primary mb-1 tracking-widest">Connectivity</p>
                 <p className="font-bold flex items-center gap-2 text-foreground/90 text-sm">
-                  <Activity className="w-4 h-4" /> Live Market Connection
+                  <Activity className="w-4 h-4" /> Finnhub.io Live Stream
                 </p>
               </div>
               <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 transition-colors hover:bg-secondary/10">
                 <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Data Tier</p>
-                <p className="font-bold text-foreground/90 text-sm">Standard Global Watcher</p>
+                <p className="font-bold text-foreground/90 text-sm">60 Req/Min Standard Watcher</p>
               </div>
             </div>
           </div>
