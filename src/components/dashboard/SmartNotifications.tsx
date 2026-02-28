@@ -1,3 +1,4 @@
+
 "use client";
 
 import { type DiscoverConfig } from "@/lib/config-store";
@@ -45,7 +46,6 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 <Clock className="w-6 h-6" />
               </div>
               <div>
-                {/* Fixed "Upcoming" Readability */}
                 <p className="text-[10px] font-black text-secondary uppercase tracking-widest">Upcoming</p>
                 <p className="text-sm font-medium text-foreground/80">Next game in 24 hours.</p>
               </div>

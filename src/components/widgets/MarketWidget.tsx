@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Minus, BarChart3, ArrowRight, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, ArrowRight, Activity } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -49,7 +50,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             )
           )
         );
-        setStocks(results.filter(Boolean));
+        setStocks(results.filter((s): s is StockData => !!s));
       } catch (err) {
         setError("Data limit reached");
       } finally {
@@ -86,8 +87,8 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             {error && stocks.length === 0 ? (
               <div className="text-center py-4 text-muted-foreground italic">{error}</div>
             ) : (
-              stocks.map((stock) => (
-                <div key={stock.symbol} className="flex items-center justify-between group/item">
+              stocks.map((stock, idx) => (
+                <div key={`${stock.symbol}-${idx}`} className="flex items-center justify-between group/item">
                   <div>
                     <p className="font-black text-xl font-headline group-hover/item:text-primary transition-colors">{stock.symbol}</p>
                     <p className="text-sm font-bold">${stock.price.toLocaleString()}</p>
@@ -134,8 +135,8 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           </div>
           <div className="space-y-2">
             <h4 className="font-bold flex items-center gap-2 text-sm uppercase tracking-widest text-muted-foreground">Market Pulse</h4>
-            {stocks.map(s => (
-              <div key={s.symbol} className="flex justify-between p-3 border-b border-muted last:border-0">
+            {stocks.map((s, idx) => (
+              <div key={`${s.symbol}-pulse-${idx}`} className="flex justify-between p-3 border-b border-muted last:border-0">
                 <span className="font-bold">{s.symbol}</span>
                 <span className="font-mono text-xs opacity-60">P/E: 24.5 | Market Cap: $2.1T</span>
               </div>
