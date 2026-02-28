@@ -44,7 +44,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     }
   }, [tickerList, selectedSymbol]);
 
-  // Fetch quotes for the card view
+  // Fetch quotes for the card view using v8 chart endpoint (more resilient than v7 quote)
   useEffect(() => {
     const fetchStocks = async () => {
       if (tickerList.length === 0) {
@@ -56,35 +56,39 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       setLoading(true);
 
       try {
-        const symbols = tickerList.join(',');
-        const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
-        
-        const data = await cachedFetch(
-          `yahoo_quotes_v3_${symbols.replace(/,/g, '_')}`,
-          async () => {
-            const res = await fetch(
-              `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+        const quoteResults = await Promise.all(
+          tickerList.map(async (symbol) => {
+            return cachedFetch(
+              `yahoo_v8_quote_${symbol}`,
+              async () => {
+                const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+                const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+                
+                if (!res.ok) throw new Error(`Access Denied (${res.status})`);
+                
+                const json = await res.json();
+                const meta = json.chart?.result?.[0]?.meta;
+                
+                if (!meta) return null;
+
+                const currentPrice = meta.regularMarketPrice || 0;
+                const prevClose = meta.chartPreviousClose || currentPrice;
+                const change = currentPrice - prevClose;
+                const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
+
+                return {
+                  symbol: symbol,
+                  price: currentPrice,
+                  change: change,
+                  changePercent: `${changePercent.toFixed(2)}%`,
+                } as StockData;
+              },
+              EXPIRY_TIMES.MARKET
             );
-            
-            if (!res.ok) {
-              if (res.status === 403) throw new Error("Market Hub Access Denied (403)");
-              throw new Error(`Market Hub Offline (${res.status})`);
-            }
-            
-            const json = await res.json();
-            const results = json.quoteResponse?.result || [];
-            
-            return results.map((item: any) => ({
-              symbol: item.symbol,
-              price: item.regularMarketPrice || 0,
-              change: item.regularMarketChange || 0,
-              changePercent: `${(item.regularMarketChangePercent || 0).toFixed(2)}%`,
-            }));
-          },
-          EXPIRY_TIMES.MARKET
+          })
         );
         
-        setStocks(data);
+        setStocks(quoteResults.filter((s): s is StockData => s !== null));
         setError(null);
       } catch (err: any) {
         console.error("Quotes fetch error:", err);
@@ -108,15 +112,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       
       try {
         const data = await cachedFetch(
-          `yahoo_chart_v3_${selectedSymbol}`,
+          `yahoo_v8_hist_${selectedSymbol}`,
           async () => {
-            const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(selectedSymbol)}?interval=1d&range=1mo`;
+            const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(selectedSymbol)}?interval=1d&range=1mo`;
             const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
             
-            if (!res.ok) {
-              if (res.status === 403) throw new Error("Chart Stream Access Denied (403)");
-              throw new Error(`History Stream Offline (${res.status})`);
-            }
+            if (!res.ok) throw new Error(`Chart Access Denied (${res.status})`);
 
             const json = await res.json();
             const result = json.chart?.result?.[0];
@@ -151,11 +152,11 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     fetchHistory();
   }, [selectedSymbol, isModalOpen]);
 
-  const handleSymbolSelect = useCallback((symbol: string, e: React.MouseEvent) => {
+  const handleSymbolSelect = (symbol: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setSelectedSymbol(symbol);
-  }, []);
+  };
 
   if (tickerList.length === 0) {
     return (

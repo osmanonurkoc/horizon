@@ -35,11 +35,9 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
   };
 
   const handleRefresh = () => {
-    // Clear all horizon caches manually for a true refresh
+    // Nuclear cache clear for all horizon keys
     if (typeof window !== 'undefined') {
-      Object.keys(localStorage)
-        .filter(key => key.startsWith('horizon_cache_'))
-        .forEach(key => localStorage.removeItem(key));
+      localStorage.clear();
     }
     setRefreshKey(prev => prev + 1);
   };
@@ -97,7 +95,7 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
       <div className="container mx-auto max-w-7xl">
         <ClockSection config={config} refreshKey={refreshKey + autoRefreshKey} />
         
-        <div className="px-6 mb-12">
+        <div className="px-6 mb-12 flex justify-center">
           <SmartNotifications config={config} />
         </div>
 

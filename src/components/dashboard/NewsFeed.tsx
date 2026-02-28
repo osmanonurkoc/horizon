@@ -43,7 +43,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v13_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          `gnews_v15_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
           async () => {
             return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
           },
@@ -90,7 +90,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     fetchNews(1, true);
   }, [fetchNews]);
 
-  // Infinite scroll trigger via effect to avoid setState-in-render
+  // Infinite scroll trigger
   useEffect(() => {
     if (page > 1) {
       fetchNews(page);
