@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -336,13 +337,13 @@ export default function Wizard({ onComplete }: WizardProps) {
                     />
                   </div>
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Feed Language</Label>
+                    <Label className="text-base font-semibold">Feed Language (Supports Multi)</Label>
                     <AutocompletePillInput 
                       options={GNEWS_LANGUAGES}
                       values={config.newsLanguages}
                       onChange={(vals) => setConfig(c => ({ ...c, newsLanguages: vals }))}
-                      placeholder="Select language..."
-                      isMulti={false}
+                      placeholder="Select languages..."
+                      isMulti={true}
                     />
                   </div>
                 </div>

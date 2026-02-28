@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -32,6 +33,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     setError(null);
 
     try {
+      // GNews lang parameter is single value. We use the first one if multiple are selected.
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'top stories';
       const lang = config.newsLanguages[0] || 'en';
       
