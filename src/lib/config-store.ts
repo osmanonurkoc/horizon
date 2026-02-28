@@ -6,7 +6,6 @@ export interface DiscoverConfig {
   apiKeys: {
     weather: string;
     news: string;
-    market: string;
   };
   searchEngine: string;
   location: string;
@@ -38,7 +37,6 @@ export const DEFAULT_CONFIG: DiscoverConfig = {
   apiKeys: {
     weather: '',
     news: '',
-    market: '',
   },
   searchEngine: 'https://www.google.com/search?q=',
   location: '',

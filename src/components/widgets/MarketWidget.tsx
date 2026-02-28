@@ -45,124 +45,108 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
 
   // Fetch quotes for the card view
   useEffect(() => {
-    setError(null);
-    setLoading(true);
-
-    if (!config.apiKeys.market || tickerList.length === 0) {
-      setLoading(false);
-      return;
-    }
-
     const fetchStocks = async () => {
-      try {
-        const apiKey = config.apiKeys.market;
-        const results = await Promise.all(
-          tickerList.map(async (ticker) => {
-            const apiKeySignature = apiKey.slice(-8);
-            return cachedFetch(
-              `finnhub_quote_v2_${ticker}_${apiKeySignature}`,
-              async () => {
-                const res = await fetch(
-                  `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${apiKey}`
-                );
-                
-                if (res.status === 403) throw new Error("Access Denied (403)");
-                if (!res.ok) throw new Error(`API Error (${res.status})`);
-                
-                const data = await res.json();
-                
-                if (data.error) throw new Error(data.error);
-                if (!data.c && data.c !== 0) return null; 
+      if (tickerList.length === 0) {
+        setLoading(false);
+        return;
+      }
 
-                return {
-                  symbol: ticker,
-                  price: data.c || 0,
-                  change: data.d || 0,
-                  changePercent: `${(data.dp || 0).toFixed(2)}%`,
-                };
-              },
-              EXPIRY_TIMES.MARKET
-            ).catch((err) => {
-              console.error(`Fetch error for ${ticker}:`, err);
-              return null;
-            });
-          })
+      setError(null);
+      setLoading(true);
+
+      try {
+        const symbols = tickerList.join(',');
+        const data = await cachedFetch(
+          `yahoo_quotes_v1_${symbols.replace(/,/g, '_')}`,
+          async () => {
+            const res = await fetch(
+              `https://corsproxy.io/?https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`
+            );
+            if (!res.ok) throw new Error(`Market Hub Offline (${res.status})`);
+            
+            const json = await res.json();
+            const results = json.quoteResponse?.result || [];
+            
+            return results.map((item: any) => ({
+              symbol: item.symbol,
+              price: item.regularMarketPrice || 0,
+              change: item.regularMarketChange || 0,
+              changePercent: `${(item.regularMarketChangePercent || 0).toFixed(2)}%`,
+            }));
+          },
+          EXPIRY_TIMES.MARKET
         );
         
-        const validStocks = results.filter((s): s is StockData => s !== null);
-        
-        if (validStocks.length === 0) {
-          setError("No signals found or Access Denied. Check your Finnhub key.");
-        } else {
-          setStocks(validStocks);
-          setError(null);
-        }
+        setStocks(data);
+        setError(null);
       } catch (err: any) {
-        setError(err.message || "Market Data Unavailable");
+        console.error("Quotes fetch error:", err);
+        setError("Unable to load market data. Please try again later.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchStocks();
-  }, [config.apiKeys.market, tickerList]);
+  }, [tickerList]);
 
   // Fetch historical data for the chart view
   useEffect(() => {
-    if (!selectedSymbol || !config.apiKeys.market || !isModalOpen) return;
+    if (!selectedSymbol || !isModalOpen) return;
 
     const fetchHistory = async () => {
       setHistLoading(true);
       setHistError(null);
       setHistoricalData([]);
+      
       try {
-        const apiKey = config.apiKeys.market;
-        const apiKeySignature = apiKey.slice(-8);
-        const to = Math.floor(Date.now() / 1000);
-        const from = to - (30 * 24 * 60 * 60);
-
         const data = await cachedFetch(
-          `finnhub_hist_v2_${selectedSymbol}_${apiKeySignature}`,
+          `yahoo_chart_v1_${selectedSymbol}`,
           async () => {
-            const url = `https://finnhub.io/api/v1/stock/candle?symbol=${selectedSymbol}&resolution=D&from=${from}&to=${to}&token=${apiKey}`;
+            const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1mo`;
             const res = await fetch(url);
-            
-            if (res.status === 403) {
-              throw new Error("Access Denied (403): This ticker requires a premium Finnhub plan for historical data.");
-            }
-            if (!res.ok) throw new Error(`Stream Error (${res.status})`);
+            if (!res.ok) throw new Error(`History Stream Offline (${res.status})`);
 
             const json = await res.json();
+            const result = json.chart?.result?.[0];
             
-            if (json.s === "no_data") throw new Error("No historical records found for this period.");
-            if (json.s !== "ok") throw new Error(json.error || "Invalid Stream Metadata");
-            if (!json.c || !json.t) throw new Error("Incomplete stream sequence received.");
+            if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) {
+              throw new Error("No historical records found for this period.");
+            }
 
-            return json.c.map((price: number, i: number) => ({
-              date: new Date(json.t[i] * 1000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }),
-              price: price
-            }));
+            const timestamps = result.timestamp;
+            const prices = result.indicators.quote[0].close;
+
+            return timestamps.map((ts: number, i: number) => {
+              if (prices[i] === null || prices[i] === undefined) return null;
+              return {
+                date: new Date(ts * 1000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }),
+                price: parseFloat(prices[i].toFixed(2))
+              };
+            }).filter((item: any) => item !== null);
           },
           EXPIRY_TIMES.MARKET
         );
+        
         setHistoricalData(data);
       } catch (err: any) {
-        setHistError(err.message || "History Stream Offline");
+        console.error("History fetch error:", err);
+        setHistError(err.message || "Unable to sync historical trends.");
       } finally {
         setHistLoading(false);
       }
     };
 
     fetchHistory();
-  }, [selectedSymbol, config.apiKeys.market, isModalOpen]);
+  }, [selectedSymbol, isModalOpen]);
 
-  if (!config.apiKeys.market || tickerList.length === 0) {
+  if (tickerList.length === 0) {
     return (
       <Card className="rounded-3xl-card bg-muted/20 border-dashed">
         <CardContent className="flex flex-col items-center justify-center h-48 text-muted-foreground p-6 text-center">
           <BarChart3 className="w-12 h-12 mb-2 opacity-30" />
           <p className="font-medium">Market Setup Required</p>
-          <p className="text-xs">Add tickers and Finnhub key in settings.</p>
+          <p className="text-xs">Add your favorite tickers in settings.</p>
         </CardContent>
       </Card>
     );
@@ -186,7 +170,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 <div>
                   <p className="font-black text-xl font-headline group-hover/item:text-primary transition-colors">{stock.symbol}</p>
                   <p className="text-sm font-bold">
-                    ${(stock.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    ${(stock.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className={`flex flex-col items-end ${(stock.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -253,7 +237,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                   <DialogDescription className="text-muted-foreground">
                     {selectedSymbol 
                       ? `30-Day performance history for ${selectedSymbol}.` 
-                      : "Detailed historical stock performance data."}
+                      : "Detailed historical stock performance trends."}
                   </DialogDescription>
                 </div>
                 {histLoading && <Loader2 className="w-6 h-6 animate-spin text-primary" />}
@@ -299,10 +283,10 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-12 bg-muted/5 rounded-3xl border border-dashed">
                   <AlertCircle className="w-12 h-12 text-destructive mb-4 opacity-40" />
                   <p className="text-lg font-bold text-foreground/80 leading-tight">
-                    {histError || "Awaiting Real Data Stream..."}
+                    {histError || "Awaiting real-time insights..."}
                   </p>
                   <p className="text-xs text-muted-foreground mt-4 max-w-sm">
-                    Historical data is pulled directly from Finnhub.io. Free tier access varies by exchange and ticker.
+                    Data provided by Yahoo Finance. Historical trends reflect the past 30 trading days.
                   </p>
                 </div>
               )}
@@ -312,12 +296,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               <div className="p-5 bg-primary/5 rounded-2xl border border-primary/10 transition-colors hover:bg-primary/10">
                 <p className="text-[10px] font-black uppercase text-primary mb-1 tracking-widest">Connectivity</p>
                 <p className="font-bold flex items-center gap-2 text-foreground/90 text-sm">
-                  <Activity className="w-4 h-4" /> Finnhub.io Live Stream
+                  <Activity className="w-4 h-4" /> Global Finance Stream
                 </p>
               </div>
               <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 transition-colors hover:bg-secondary/10">
-                <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Data Tier</p>
-                <p className="font-bold text-foreground/90 text-sm">60 Req/Min Standard Watcher</p>
+                <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Provider</p>
+                <p className="font-bold text-foreground/90 text-sm">Yahoo Finance Hub</p>
               </div>
             </div>
           </div>

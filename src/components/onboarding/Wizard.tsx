@@ -88,14 +88,13 @@ export default function Wizard({ onComplete }: WizardProps) {
     if (!q || q.length < 1) return;
 
     searchTimeout.current = setTimeout(async () => {
-      if (!config.apiKeys.market) return;
       setIsSearching(true);
       try {
-        // Finnhub search endpoint
-        const res = await fetch(`https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${config.apiKeys.market}`);
+        // Yahoo Finance symbol lookup via proxy
+        const res = await fetch(`https://corsproxy.io/?https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}`);
         const data = await res.json();
-        if (data.result) {
-          setLocationResults(data.result.map((m: any) => `${m.symbol} (${m.description})`));
+        if (data.quotes) {
+          setStockResults(data.quotes.map((m: any) => `${m.symbol} (${m.shortname || m.longname})`));
         }
       } catch (err) {
         console.error(err);
@@ -103,7 +102,7 @@ export default function Wizard({ onComplete }: WizardProps) {
         setIsSearching(false);
       }
     }, 300);
-  }, [config.apiKeys.market]);
+  }, []);
 
   const fetchSports = useCallback((q: string) => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -218,8 +217,7 @@ export default function Wizard({ onComplete }: WizardProps) {
                 <Label className="text-base font-semibold">API Credentials</Label>
                 {[
                   { id: 'weather', label: 'OpenWeather', link: 'https://home.openweathermap.org/users/sign_up', help: 'Get a free key at openweathermap.org', tip: 'Powers local weather updates' },
-                  { id: 'news', label: 'GNews API', link: 'https://gnews.io/register', help: 'Get a free key at gnews.io', tip: 'Feeds the masonry-style news stream' },
-                  { id: 'market', label: 'Finnhub API', link: 'https://finnhub.io/register', help: 'Get a free key at finnhub.io', tip: 'Provides high-frequency stock and market data' }
+                  { id: 'news', label: 'GNews API', link: 'https://gnews.io/register', help: 'Get a free key at gnews.io', tip: 'Feeds the masonry-style news stream' }
                 ].map((api) => (
                   <div key={api.id} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -352,14 +350,14 @@ export default function Wizard({ onComplete }: WizardProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {config.enabledWidgets.market && (
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Market Tickers (Finnhub)</Label>
+                    <Label className="text-base font-semibold">Market Tickers (Yahoo Finance)</Label>
                     <AutocompletePillInput 
                       options={stockResults}
                       values={config.stocks}
                       onSearch={fetchStocks}
                       isLoading={isSearching}
                       onChange={(vals) => setConfig(c => ({ ...c, stocks: vals }))}
-                      placeholder={config.apiKeys.market ? "Search stocks..." : "Add Finnhub API Key first"}
+                      placeholder="Search stocks (e.g. AAPL, THYAO.IS)..."
                     />
                   </div>
                 )}
