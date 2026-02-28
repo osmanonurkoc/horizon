@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -5,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import Image from "next/image";
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Article {
   title: string;
@@ -18,11 +21,17 @@ interface Article {
 export function NewsFeed({ config }: { config: DiscoverConfig }) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const loaderRef = useRef<HTMLDivElement>(null);
 
   const fetchNews = async () => {
     if (!config.apiKeys.news) return;
+    
+    setLoading(true);
+    // Only reset error if we have no articles, otherwise we might be infinite-loading
+    if (page === 1) setError(null);
+
     try {
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'world';
       const result = await cachedFetch(
@@ -30,17 +39,28 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         async () => {
           const res = await fetch(
             `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=${config.newsLanguages[0] || 'en'}&max=10&apikey=${config.apiKeys.news}`
-          );
+          ).catch(err => {
+            throw new Error("Network error: Failed to reach the news service.");
+          });
+          
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.errors?.[0] || `News API error: ${res.status}`);
+          }
+          
           const json = await res.json();
+          if (!json.articles) throw new Error("No articles found in response");
           return json.articles as Article[];
         },
         EXPIRY_TIMES.NEWS
       );
+      
       if (result) {
         setArticles(prev => page === 1 ? result : [...prev, ...result]);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("News fetch error:", err);
+      setError(err.message || "Failed to fetch news. Please check your network or API key.");
     } finally {
       setLoading(false);
     }
@@ -51,20 +71,40 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
   }, [config, page]);
 
   useEffect(() => {
+    if (error) return;
+
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && !loading) {
+      if (entries[0].isIntersecting && !loading && !error) {
         setPage(p => p + 1);
       }
     }, { threshold: 1 });
 
     if (loaderRef.current) observer.observe(loaderRef.current);
     return () => observer.disconnect();
-  }, [loading]);
+  }, [loading, error]);
 
   if (!config.apiKeys.news) {
     return (
       <Card className="rounded-3xl-card bg-muted/20 border-dashed h-40 flex items-center justify-center">
         <p className="text-muted-foreground italic font-medium">News API Key required to view feed.</p>
+      </Card>
+    );
+  }
+
+  // Show a full error card if we failed to load the first page
+  if (error && articles.length === 0) {
+    return (
+      <Card className="rounded-3xl-card border-destructive/20 bg-destructive/5 p-12 text-center">
+        <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4 opacity-50" />
+        <h4 className="text-xl font-headline font-bold text-destructive mb-2">Deep Dive Interrupted</h4>
+        <p className="text-muted-foreground mb-6 max-w-md mx-auto">{error}</p>
+        <Button 
+          variant="outline" 
+          onClick={() => { setPage(1); fetchNews(); }}
+          className="rounded-full gap-2 border-destructive/20 hover:bg-destructive/10"
+        >
+          <RefreshCw className="w-4 h-4" /> Try Again
+        </Button>
       </Card>
     );
   }
@@ -110,8 +150,16 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         ))}
       </div>
       
+      {error && articles.length > 0 && (
+        <div className="text-center p-6 bg-destructive/5 rounded-2xl border border-destructive/10 flex items-center justify-center gap-3">
+          <AlertCircle className="w-5 h-5 text-destructive" />
+          <p className="text-destructive font-medium text-sm">Failed to load more: {error}</p>
+          <Button variant="ghost" size="sm" onClick={() => fetchNews()} className="text-xs h-8">Retry</Button>
+        </div>
+      )}
+
       <div ref={loaderRef} className="h-10 w-full flex items-center justify-center">
-        {loading && <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />}
+        {loading && articles.length > 0 && <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />}
       </div>
     </div>
   );
