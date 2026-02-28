@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -48,7 +49,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
   );
 
   useEffect(() => {
-    // Reset states when configuration changes to allow fresh attempts
+    // Reset states and clear demo flag when configuration changes to force live retry
     setIsDemo(false);
     setError(null);
     setLoading(true);
@@ -62,10 +63,10 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       try {
         const results = await Promise.all(
           tickerList.map(async (ticker) => {
-            // Cache busting by including API key hash in the key
+            // Key busting using hash of current API key
             const apiKeyHash = config.apiKeys.market.slice(-4);
             return cachedFetch(
-              `stock_v8_${ticker}_${apiKeyHash}`,
+              `stock_v10_${ticker}_${apiKeyHash}`,
               async () => {
                 const res = await fetch(
                   `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${config.apiKeys.market}`
@@ -101,7 +102,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         const validStocks = results.filter((s): s is StockData => s !== null);
         
         if (validStocks.length === 0) {
-          setError("API Limit Reached - Using Demo Mode");
+          setError("Daily Limit Reached - Demo Active");
           setStocks(DEMO_STOCKS);
           setIsDemo(true);
         } else {
@@ -110,7 +111,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           setError(null);
         }
       } catch (err: any) {
-        setError(err.message === "API Limit Reached" ? "API Limit Reached - Demo Active" : "Market Data Unavailable");
+        setError(err.message === "API Limit Reached" ? "Limit Reached - Demo Mode" : "Market Data Unavailable");
         setStocks(DEMO_STOCKS);
         setIsDemo(true);
       } finally {
@@ -120,7 +121,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
 
     fetchStocks();
     if (tickerList.length > 0) setSelectedSymbol(tickerList[0]);
-    else if (isDemo) setSelectedSymbol(DEMO_STOCKS[0].symbol);
+    else setSelectedSymbol("AAPL");
   }, [config.apiKeys.market, tickerList]);
 
   useEffect(() => {
@@ -137,7 +138,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       try {
         const apiKeyHash = config.apiKeys.market.slice(-4);
         const data = await cachedFetch(
-          `stock_hist_v3_${selectedSymbol}_${apiKeyHash}`,
+          `stock_hist_v5_${selectedSymbol}_${apiKeyHash}`,
           async () => {
             const res = await fetch(
               `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${selectedSymbol}&apikey=${config.apiKeys.market}`

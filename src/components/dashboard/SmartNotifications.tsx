@@ -1,3 +1,4 @@
+
 "use client";
 
 import { type DiscoverConfig } from "@/lib/config-store";
@@ -6,7 +7,7 @@ import { AlertCircle, PlayCircle, Clock } from "lucide-react";
 
 export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   return (
-    <div className="flex gap-6 justify-center overflow-x-auto pb-6 scrollbar-hide no-scrollbar">
+    <div className="flex gap-6 justify-center overflow-x-auto pb-6 scrollbar-hide no-scrollbar w-full">
       {config.enabledWidgets.weather && config.location && (
         <Card className="flex-none w-[380px] rounded-3xl border-none bg-blue-500/10 border-l-4 border-l-blue-500 shadow-sm group hover:bg-blue-500/15 transition-all">
           <CardContent className="p-5 flex items-center gap-5">

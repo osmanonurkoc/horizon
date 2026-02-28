@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { type DiscoverConfig, saveConfig } from "@/lib/config-store";
 import { ClockSection } from "./ClockSection";
 import { SmartNotifications } from "./SmartNotifications";
@@ -17,6 +17,15 @@ import { Settings, Moon, Sun, RefreshCcw } from "lucide-react";
 export default function Dashboard({ config, onOpenSettings }: { config: DiscoverConfig, onOpenSettings: () => void }) {
   const [currentTheme, setCurrentTheme] = useState(config.theme);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [autoRefreshKey, setAutoRefreshKey] = useState(0);
+
+  // Auto-refresh every 2 hours (excluding news feed)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAutoRefreshKey(prev => prev + 1);
+    }, 2 * 60 * 60 * 1000); // 7,200,000ms
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleTheme = () => {
     const newTheme = currentTheme === 'latte' ? 'mocha' : 'latte';
@@ -38,12 +47,15 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
   const renderWidget = (name: string) => {
     if (!config.enabledWidgets[name as keyof DiscoverConfig['enabledWidgets']]) return null;
 
+    // Use combined key for auto-refreshing widgets
+    const widgetKey = `${name}-${refreshKey}-${autoRefreshKey}`;
+
     switch (name) {
-      case 'weather': return <WeatherWidget key={`${name}-${refreshKey}`} config={config} />;
-      case 'market': return <MarketWidget key={`${name}-${refreshKey}`} config={config} />;
+      case 'weather': return <WeatherWidget key={widgetKey} config={config} />;
+      case 'market': return <MarketWidget key={widgetKey} config={config} />;
       case 'search': return <SearchWidget key={name} config={config} />;
       case 'bookmarks': return <BookmarksWidget key={name} config={config} />;
-      case 'sports': return <SportsWidget key={`${name}-${refreshKey}`} config={config} />;
+      case 'sports': return <SportsWidget key={widgetKey} config={config} />;
       default: return null;
     }
   };
@@ -83,7 +95,7 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
       </div>
 
       <div className="container mx-auto max-w-7xl">
-        <ClockSection config={config} refreshKey={refreshKey} />
+        <ClockSection config={config} refreshKey={refreshKey + autoRefreshKey} />
         
         <div className="px-6 mb-12">
           <SmartNotifications config={config} />
@@ -98,6 +110,7 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
             <h3 className="text-2xl font-headline font-black mb-6 flex items-center gap-3">
               Deep Dive <span className="text-muted-foreground font-normal text-sm uppercase tracking-widest">Global Updates</span>
             </h3>
+            {/* News feed only refreshes manually */}
             <NewsFeed key={`news-${refreshKey}`} config={config} />
           </div>
         )}

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -40,10 +41,9 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
       const languages = config.newsLanguages.length > 0 ? config.newsLanguages : ['en'];
       
-      // Multi-language support via parallel requests
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v9_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          `gnews_v10_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
           async () => {
             return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
           },
