@@ -1,9 +1,10 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Calendar, ArrowRight, ShieldCheck } from "lucide-react";
+import { Trophy, ArrowRight, ShieldCheck } from "lucide-react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export function SportsWidget({ config }: { config: DiscoverConfig }) {
   if (config.sportsTeams.length === 0) {
@@ -43,7 +44,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                   <div className="flex flex-col items-end">
                     <div className="flex items-center gap-2 mb-1">
                       <div className="pulsating-dot" />
-                      <span className="text-xs font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-full">LIVE</span>
+                      <span className="text-[10px] font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-full">LIVE</span>
                     </div>
                     <p className="text-xl font-black tabular-nums">2 - 1</p>
                   </div>
@@ -58,7 +59,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
           </CardContent>
         </Card>
       </DialogTrigger>
-      <DialogContent className="rounded-3xl border-none max-w-2xl">
+      <DialogContent className="rounded-3xl border-none max-w-2xl bg-card">
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline font-bold">Club News & Schedule</DialogTitle>
         </DialogHeader>
@@ -81,11 +82,11 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="text-sm">
                 <span className="block font-bold">Injuries</span>
-                <span className="text-muted-foreground">2 Key players out</span>
+                <span className="text-muted-foreground text-xs">2 Key players out</span>
               </div>
               <div className="text-sm">
                 <span className="block font-bold">Discipline</span>
-                <span className="text-muted-foreground">No active bans</span>
+                <span className="text-muted-foreground text-xs">No active bans</span>
               </div>
             </div>
           </div>
@@ -95,9 +96,9 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
               { opponent: 'Paris SC', date: 'Oct 24, 21:00' },
               { opponent: 'Berlin Utd', date: 'Oct 28, 15:30' }
             ].map((fix, idx) => (
-              <div key={idx} className="flex justify-between items-center p-4 bg-muted/20 rounded-2xl">
+              <div key={idx} className="flex justify-between items-center p-4 bg-muted/20 rounded-2xl hover:bg-muted/30 transition-colors">
                 <span className="font-bold">{fix.opponent}</span>
-                <span className="text-xs opacity-60 font-bold uppercase">{fix.date}</span>
+                <span className="text-[10px] opacity-60 font-bold uppercase">{fix.date}</span>
               </div>
             ))}
           </div>

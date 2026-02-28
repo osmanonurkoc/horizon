@@ -16,16 +16,16 @@ export function SearchWidget({ config }: { config: DiscoverConfig }) {
   };
 
   return (
-    <Card className="rounded-3xl-card bg-primary shadow-lg border-none overflow-hidden group transition-all hover:scale-[1.01]">
-      <CardContent className="p-6">
+    <Card className="rounded-3xl-card bg-card shadow-sm border border-border/50 overflow-hidden group transition-all hover:shadow-md hover:border-primary/30">
+      <CardContent className="p-4">
         <form onSubmit={handleSearch} className="relative">
           <Input 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Explore the horizon..."
-            className="h-16 pl-14 pr-6 rounded-2xl bg-primary-foreground/10 border-none text-primary-foreground placeholder:text-primary-foreground/60 text-lg focus-visible:ring-offset-0 focus-visible:ring-2 focus-visible:ring-primary-foreground/50 transition-all"
+            className="h-14 pl-12 pr-6 rounded-2xl bg-muted/30 border-none text-foreground placeholder:text-muted-foreground text-lg focus-visible:ring-offset-0 focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
           />
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-primary-foreground/80" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <button type="submit" className="hidden">Search</button>
         </form>
       </CardContent>

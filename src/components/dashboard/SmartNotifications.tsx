@@ -3,7 +3,6 @@
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, PlayCircle, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   return (
@@ -15,7 +14,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               <AlertCircle className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">Weather Alert</p>
+              <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">Weather Alert</p>
               <p className="text-sm font-medium text-foreground/80">Clear skies expected in {config.location} all day.</p>
             </div>
           </CardContent>
@@ -34,7 +33,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 </div>
               </div>
               <div>
-                <p className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-tighter">Live Match</p>
+                <p className="text-[10px] font-black text-red-700 dark:text-red-400 uppercase tracking-widest">Live Match</p>
                 <p className="text-sm font-medium text-foreground/80">{config.sportsTeams[0]} is currently playing.</p>
               </div>
             </CardContent>
@@ -46,7 +45,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 <Clock className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm font-black text-secondary dark:text-secondary-foreground uppercase tracking-tighter">Upcoming</p>
+                <p className="text-[10px] font-black text-secondary-foreground bg-secondary/20 px-2 py-0.5 rounded-full uppercase tracking-widest">Upcoming</p>
                 <p className="text-sm font-medium text-foreground/80">Next game in 24 hours.</p>
               </div>
             </CardContent>
