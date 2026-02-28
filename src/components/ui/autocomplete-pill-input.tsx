@@ -3,7 +3,6 @@
 import * as React from "react";
 import { Check, ChevronsUpDown, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -77,7 +76,6 @@ export function AutocompletePillInput({
     }
   };
 
-  // Keep active item in view
   React.useEffect(() => {
     if (activeIndex !== -1 && scrollContainerRef.current) {
       const activeItem = scrollContainerRef.current.children[activeIndex] as HTMLElement;
@@ -134,7 +132,7 @@ export function AutocompletePillInput({
                       values.includes(option) && "text-primary font-bold"
                     )}
                     onMouseDown={(e) => {
-                      e.preventDefault(); // Prevent input blur
+                      e.preventDefault();
                       handleSelect(option);
                     }}
                     onMouseEnter={() => setActiveIndex(index)}

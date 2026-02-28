@@ -28,9 +28,9 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     const fetchStocks = async () => {
       try {
         const results = await Promise.all(
-          config.stocks.map(symbol => 
+          config.stocks.map((symbol, idx) => 
             cachedFetch(
-              `stock_${symbol}`,
+              `stock_${symbol}_${config.apiKeys.market.slice(-4)}`,
               async () => {
                 const res = await fetch(
                   `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${config.apiKeys.market}`
@@ -38,18 +38,14 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 const json = await res.json();
                 const quote = json["Global Quote"];
                 
-                // Validate that we have the necessary fields
                 if (!quote || quote["05. price"] === undefined) {
                   return null;
                 }
 
-                const price = parseFloat(quote["05. price"]);
-                const change = parseFloat(quote["09. change"]);
-
                 return {
                   symbol: quote["01. symbol"],
-                  price: isNaN(price) ? 0 : price,
-                  change: isNaN(change) ? 0 : change,
+                  price: parseFloat(quote["05. price"]) || 0,
+                  change: parseFloat(quote["09. change"]) || 0,
                   changePercent: quote["10. change percent"] || "0%",
                 };
               },
@@ -57,7 +53,6 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             )
           )
         );
-        // Filter out any null results from API limits or missing data
         setStocks(results.filter((s): s is StockData => s !== null));
       } catch (err) {
         setError("Data limit reached");

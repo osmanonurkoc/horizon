@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
@@ -26,23 +25,26 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchNews = async () => {
+  const fetchNews = useCallback(async () => {
     if (!config.apiKeys.news) return;
     
     setLoading(true);
     setError(null);
 
     try {
-      // GNews lang parameter is single value. We use the first one if multiple are selected.
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'top stories';
       const lang = config.newsLanguages[0] || 'en';
+      const endpoint = config.newsTopics.length > 0 ? 'search' : 'top-headlines';
       
+      // GNews API usage
       const result = await cachedFetch(
-        `gnews_v1_${encodeURIComponent(q)}_${lang}`,
+        `gnews_v1_${encodeURIComponent(q)}_${lang}_${config.apiKeys.news.slice(-4)}`,
         async () => {
-          const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=${lang}&max=12&apikey=${config.apiKeys.news}`;
+          const baseUrl = `https://gnews.io/api/v4/${endpoint}`;
+          const queryParam = endpoint === 'search' ? `q=${encodeURIComponent(q)}` : 'category=general';
+          const url = `${baseUrl}?${queryParam}&lang=${lang}&max=12&apikey=${config.apiKeys.news}`;
           
-          const res = await fetch(url);
+          const res = await fetch(url, { mode: 'cors' });
           const json = await res.json();
 
           if (!res.ok) {
@@ -61,11 +63,11 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [config]);
 
   useEffect(() => {
     fetchNews();
-  }, [config]);
+  }, [fetchNews]);
 
   if (!config.apiKeys.news) {
     return (
@@ -94,7 +96,6 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="space-y-12">
-      {/* TRUE MASONRY LAYOUT USING COLUMNS */}
       <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
         {articles.map((article, idx) => (
           <a 
