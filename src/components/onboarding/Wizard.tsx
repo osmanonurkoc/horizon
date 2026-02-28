@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -9,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Pill } from "@/components/ui/pill";
 import { 
   HelpCircle, ArrowRight, ArrowLeft, Check, Plus, 
-  Download, Upload, ChevronUp, ChevronDown, Monitor, Search as SearchIcon
+  Download, Upload, ChevronUp, ChevronDown, Monitor, Info
 } from "lucide-react";
 import { 
   type DiscoverConfig, saveConfig, DEFAULT_CONFIG, getConfig, SEARCH_ENGINES 
@@ -18,12 +19,26 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AutocompletePillInput } from "@/components/ui/autocomplete-pill-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Mock data for autocomplete
 const MOCK_DATA = {
-  locations: ["London, UK", "New York, US", "Tokyo, JP", "Paris, FR", "Berlin, DE", "San Francisco, US", "Sydney, AU", "Toronto, CA"],
-  stocks: ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "META", "NFLX", "NVDA", "BTC-USD"],
-  sports: ["Manchester United", "Arsenal", "Liverpool", "Lakers", "Warriors", "Yankees", "Real Madrid", "Ferrari F1"],
-  topics: ["Technology", "Science", "Health", "Business", "Entertainment", "Sports", "Politics", "AI", "Space"],
+  locations: [
+    "London, UK", "New York, US", "Tokyo, JP", "Paris, FR", "Berlin, DE", "San Francisco, US", "Sydney, AU", "Toronto, CA",
+    "Singapore, SG", "Dubai, AE", "Hong Kong, HK", "Seoul, KR", "Amsterdam, NL", "Stockholm, SE", "Oslo, NO", "Madrid, ES"
+  ],
+  stocks: [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK.B", "UNH", "V", "JNJ", "WMT", "JPM", "MA", "PG", "AVGO", 
+    "ORCL", "HD", "CVX", "ABBV", "LLY", "MRK", "PEP", "KO", "BAC", "COST", "TMO", "AVGO", "CSCO", "ACN", "ABT", "ADBE"
+  ],
+  sports: [
+    "Real Madrid", "Manchester City", "Bayern Munich", "Arsenal", "Paris Saint-Germain", "Barcelona", "Inter Milan", 
+    "Liverpool", "Bayer Leverkusen", "Atletico Madrid", "Borussia Dortmund", "Juventus", "AC Milan", "Napoli", 
+    "Benfica", "Porto", "Ajax", "PSV Eindhoven", "Sporting CP", "Aston Villa", "Tottenham Hotspur", "Chelsea", 
+    "Manchester United", "Newcastle United", "Lazio", "Roma", "Feyenoord", "Galatasaray", "Fenerbahce"
+  ],
+  topics: [
+    "Technology", "Artificial Intelligence", "Finance", "Space Exploration", "Climate Change", "Cybersecurity", 
+    "Health & Wellness", "Global Economy", "Renewable Energy", "Quantum Computing", "Electric Vehicles", 
+    "Sustainability", "Venture Capital", "Biotechnology", "Robotics", "E-commerce", "Semiconductors"
+  ],
   languages: ["en", "es", "fr", "de", "it", "ja", "ko", "pt", "ru", "zh"]
 };
 
@@ -37,7 +52,6 @@ export default function Wizard({ onComplete }: WizardProps) {
   const [tempBookmark, setTempBookmark] = useState({ name: '', url: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Requirement 1: Pre-fill wizard state from localStorage on mount
   useEffect(() => {
     const stored = getConfig();
     if (stored) {
@@ -55,7 +69,6 @@ export default function Wizard({ onComplete }: WizardProps) {
     }));
   };
 
-  // Requirement 5: Widget Reordering Logic
   const moveWidget = (direction: 'up' | 'down', index: number) => {
     const newOrder = [...config.widgetOrder];
     if (direction === 'up' && index > 0) {
@@ -66,7 +79,6 @@ export default function Wizard({ onComplete }: WizardProps) {
     setConfig(prev => ({ ...prev, widgetOrder: newOrder }));
   };
 
-  // Requirement 1: Export Config
   const exportConfig = () => {
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -77,7 +89,6 @@ export default function Wizard({ onComplete }: WizardProps) {
     URL.revokeObjectURL(url);
   };
 
-  // Requirement 1: Import Config
   const importConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -148,7 +159,6 @@ export default function Wizard({ onComplete }: WizardProps) {
                   </div>
                 </div>
 
-                {/* Requirement 4: Search Engine Preference */}
                 <div className="space-y-4">
                   <Label className="text-base font-semibold">Search Engine</Label>
                   <Select 
@@ -170,27 +180,33 @@ export default function Wizard({ onComplete }: WizardProps) {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">API Credentials</Label>
-                  <p className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">Local Storage Only</p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                    <Info className="w-3 h-3" />
+                    <span>Keys are stored locally only</span>
+                  </div>
                 </div>
                 
                 {[
-                  { id: 'weather', label: 'OpenWeather', link: 'https://home.openweathermap.org/users/sign_up', help: 'Get a free key at openweathermap.org' },
-                  { id: 'news', label: 'GNews', link: 'https://gnews.io/register', help: 'Get a free key at gnews.io' },
-                  { id: 'market', label: 'Alpha Vantage', link: 'https://www.alphavantage.co/support/#api-key', help: 'Get a free key at alphavantage.co' }
+                  { id: 'weather', label: 'OpenWeather', link: 'https://home.openweathermap.org/users/sign_up', help: 'Get a free key at openweathermap.org', tip: 'Powers local weather updates' },
+                  { id: 'news', label: 'Mediastack', link: 'https://mediastack.com/signup/free', help: 'Get a free key at mediastack.com', tip: 'Feeds the "Deep Dive" global news stream' },
+                  { id: 'market', label: 'Alpha Vantage', link: 'https://www.alphavantage.co/support/#api-key', help: 'Get a free key at alphavantage.co', tip: 'Provides real-time stock and market data' }
                 ].map((api) => (
                   <div key={api.id} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor={api.id} className="font-bold">{api.label} API Key</Label>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <a href={api.link} target="_blank" rel="noopener noreferrer">
-                              <HelpCircle className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                            </a>
-                          </TooltipTrigger>
-                          <TooltipContent className="rounded-lg">{api.help}</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={api.id} className="font-bold">{api.label} API Key</Label>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <a href={api.link} target="_blank" rel="noopener noreferrer">
+                                <HelpCircle className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+                              </a>
+                            </TooltipTrigger>
+                            <TooltipContent className="rounded-lg">{api.help}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60">{api.tip}</span>
                     </div>
                     <Input 
                       id={api.id}
@@ -235,7 +251,7 @@ export default function Wizard({ onComplete }: WizardProps) {
               </div>
               
               <div className="space-y-4">
-                <Label className="text-base font-semibold block mb-4">Display Priority (Drag or click to reorder)</Label>
+                <Label className="text-base font-semibold block mb-4">Display Priority (Click arrows to reorder)</Label>
                 <div className="space-y-2">
                   {config.widgetOrder.map((name, idx) => (
                     <div key={name} className="flex items-center justify-between bg-card border px-6 py-4 rounded-2xl shadow-sm group">
@@ -283,11 +299,10 @@ export default function Wizard({ onComplete }: WizardProps) {
           <>
             <CardHeader className="pt-8 pb-6 px-10">
               <CardTitle className="text-3xl font-headline font-bold">Personalized Discovery</CardTitle>
-              <CardDescription className="text-lg font-medium">Step 3: Feed customization with autocomplete pills.</CardDescription>
+              <CardDescription className="text-lg font-medium">Step 3: Feed customization with expanded suggestions.</CardDescription>
             </CardHeader>
             <CardContent className="px-10 space-y-10 max-h-[500px] overflow-y-auto pr-6 custom-scrollbar">
               
-              {/* Requirement 3: Autocomplete Pill UI */}
               {config.enabledWidgets.weather && (
                 <div className="space-y-4">
                   <Label className="text-base font-semibold">Base Location</Label>
@@ -327,7 +342,7 @@ export default function Wizard({ onComplete }: WizardProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {config.enabledWidgets.market && (
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Market Tickers</Label>
+                    <Label className="text-base font-semibold">Market Tickers (Alpha Vantage)</Label>
                     <AutocompletePillInput 
                       options={MOCK_DATA.stocks}
                       values={config.stocks}
@@ -338,7 +353,7 @@ export default function Wizard({ onComplete }: WizardProps) {
                 )}
                 {config.enabledWidgets.sports && (
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Stadium Teams</Label>
+                    <Label className="text-base font-semibold">Stadium Teams (Global Clubs)</Label>
                     <AutocompletePillInput 
                       options={MOCK_DATA.sports}
                       values={config.sportsTeams}

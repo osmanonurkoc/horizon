@@ -6,52 +6,56 @@ import { Card, CardContent } from "@/components/ui/card";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import Image from "next/image";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Article {
   title: string;
   description: string;
   url: string;
-  image: string;
-  publishedAt: string;
-  source: { name: string; url: string };
+  image?: string;
+  published_at: string;
+  source: string;
+  category: string;
 }
 
 export function NewsFeed({ config }: { config: DiscoverConfig }) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
+  const [offset, setOffset] = useState(0);
   const loaderRef = useRef<HTMLDivElement>(null);
 
   const fetchNews = async () => {
     if (!config.apiKeys.news) return;
     
     setLoading(true);
-    // Only reset error if we have no articles, otherwise we might be infinite-loading
-    if (page === 1) setError(null);
+    if (offset === 0) setError(null);
 
     try {
-      const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'world';
+      const keywords = config.newsTopics.length > 0 ? config.newsTopics.join(',') : 'general';
+      const languages = config.newsLanguages.length > 0 ? config.newsLanguages.join(',') : 'en';
+      
       const result = await cachedFetch(
-        `news_${q}_${page}`,
+        `news_mediastack_${keywords}_${languages}_${offset}`,
         async () => {
           try {
+            // Using Mediastack as the alternative provider
             const res = await fetch(
-              `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=${config.newsLanguages[0] || 'en'}&max=10&apikey=${config.apiKeys.news}`
+              `https://api.mediastack.com/v1/news?access_key=${config.apiKeys.news}&keywords=${encodeURIComponent(keywords)}&languages=${languages}&limit=12&offset=${offset}`
             );
             
             if (!res.ok) {
               const errorData = await res.json().catch(() => ({}));
-              throw new Error(errorData.errors?.[0] || `News API error: ${res.status}`);
+              throw new Error(errorData.error?.message || `News API error: ${res.status}`);
             }
             
             const json = await res.json();
-            if (!json.articles) throw new Error("No articles found in response");
-            return json.articles as Article[];
+            if (!json.data) throw new Error("No data found in response");
+            
+            // Map the Mediastack format to our internal Article interface
+            return json.data as Article[];
           } catch (err: any) {
-            // Surface common fetch issues without crashing
             if (err.name === 'TypeError' || err.message.includes('fetch')) {
               throw new Error("Network error: Failed to reach the news service. This might be due to connection issues or API restrictions.");
             }
@@ -62,10 +66,9 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       );
       
       if (result) {
-        setArticles(prev => page === 1 ? result : [...prev, ...result]);
+        setArticles(prev => offset === 0 ? result : [...prev, ...result]);
       }
     } catch (err: any) {
-      // Do not use console.error to avoid triggering dev overlays for expected network failures
       setError(err.message || "Failed to fetch news. Please check your network or API key.");
     } finally {
       setLoading(false);
@@ -74,14 +77,14 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
   useEffect(() => {
     fetchNews();
-  }, [config, page]);
+  }, [config, offset]);
 
   useEffect(() => {
     if (error) return;
 
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && !loading && !error) {
-        setPage(p => p + 1);
+        setOffset(prev => prev + 12);
       }
     }, { threshold: 1 });
 
@@ -92,12 +95,11 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
   if (!config.apiKeys.news) {
     return (
       <Card className="rounded-3xl-card bg-muted/20 border-dashed h-40 flex items-center justify-center">
-        <p className="text-muted-foreground italic font-medium">News API Key required to view feed.</p>
+        <p className="text-muted-foreground italic font-medium">Mediastack API Key required to view feed.</p>
       </Card>
     );
   }
 
-  // Show a full error card if we failed to load the first page
   if (error && articles.length === 0) {
     return (
       <Card className="rounded-3xl-card border-destructive/20 bg-destructive/5 p-12 text-center">
@@ -106,7 +108,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         <p className="text-muted-foreground mb-6 max-w-md mx-auto">{error}</p>
         <Button 
           variant="outline" 
-          onClick={() => { setPage(1); fetchNews(); }}
+          onClick={() => { setOffset(0); fetchNews(); }}
           className="rounded-full gap-2 border-destructive/20 hover:bg-destructive/10"
         >
           <RefreshCw className="w-4 h-4" /> Try Again
@@ -119,7 +121,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     <div className="space-y-12">
       <div className="masonry-grid">
         {articles.map((article, idx) => (
-          <a key={idx} href={article.url} target="_blank" rel="noopener noreferrer" className="block group">
+          <a key={`${article.url}-${idx}`} href={article.url} target="_blank" rel="noopener noreferrer" className="block group">
             <Card className="rounded-3xl-card overflow-hidden bg-card border-none shadow-sm hover:shadow-xl transition-all duration-500">
               {article.image && (
                 <div className="relative h-48 w-full overflow-hidden">
@@ -127,18 +129,29 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
                     src={article.image} 
                     alt={article.title} 
                     fill 
+                    unoptimized={true}
                     className="object-cover group-hover:scale-105 transition-transform duration-700" 
                   />
+                  <div className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ExternalLink className="w-4 h-4" />
+                  </div>
                 </div>
               )}
               <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    {article.source.name}
-                  </span>
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                    {new Date(article.publishedAt).toLocaleDateString()}
-                  </span>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                      {article.source || 'News'}
+                    </span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                      {new Date(article.published_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {article.category && (
+                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/40">
+                      {article.category}
+                    </span>
+                  )}
                 </div>
                 <h4 className="text-lg font-headline font-bold leading-snug group-hover:text-primary transition-colors mb-3">
                   {article.title}
@@ -151,8 +164,8 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
           </a>
         ))}
         
-        {loading && Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-80 rounded-3xl-card animate-skeleton bg-muted/40" />
+        {loading && Array.from({ length: 4 }).map((_, i) => (
+          <div key={`skeleton-${i}`} className="h-80 rounded-3xl-card animate-skeleton bg-muted/40" />
         ))}
       </div>
       
