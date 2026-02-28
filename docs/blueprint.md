@@ -1,0 +1,21 @@
+# **App Name**: Personal Horizon
+
+## Core Features:
+
+- Dashboard Display & Dynamic Layout: Renders the main dashboard structure including clock, dynamic greeting, smart notifications, and arranges various widgets (Bookmarks, Search, Weather, Market, Sports, News Feed) based on user-selected layout ('single' or 'double column') and order, incorporating fluid typography, rounded cards, and generous padding.
+- Onboarding Wizard & Configuration: A multi-step guided setup for users to provide API keys, select initial layout (single/double column), toggle and reorder widgets (Search, Bookmarks, Weather, Market, Sports, News Feed), and configure settings for enabled widgets (Search Engine, Bookmark pairs, Location, Stocks/Teams, News Topics/Languages using Pill UI). Includes '?' tooltips to free-tier API registration pages.
+- Local State & Caching Architecture: Manages 'discover_config' (theme, layout, API keys, etc.) in 'localStorage' and implements a custom fetcher utility for API responses, caching data in 'localStorage' with timestamps, and re-fetching based on configurable expiry times (30min/2hr for market/weather, 2hr for news).
+- Contextual Smart Notifications: Displays permanent horizontal cards for critical alerts such as weather warnings and real-time updates for sports (upcoming and live matches with a pulsating 'LIVE' indicator), pulling relevant information from configured widgets.
+- Unified Widget Rendering & Interactivity: Handles the dynamic rendering and interaction for each specific widget: Bookmarks as quick-links, Search redirecting to chosen engine, Weather using local assets for conditions, Market/Sports showing tracked data, and News Feed as a full-width Masonry grid with infinite scroll. This includes rounded-3xl cards and subtle hover effects.
+- Enhanced UI Robustness: Provides visual feedback during data loading via pulsing skeleton cards (Catppuccin themed) and graceful degradation for API errors or invalid keys by rendering beautifully styled 'Data Unavailable' or 'Invalid API Key' fallback cards for individual widgets.
+- AI-Powered Personalized Briefing Tool: Synthesizes a daily dynamic greeting by analyzing the user's enabled widgets and configurations (e.g., current weather, top news headlines, market summary) to provide a concise, personalized textual overview upon dashboard load.
+
+## Style Guidelines:
+
+- Primary color: A gentle, warm purplish-pink (#C789A9), chosen to reflect the sophisticated and comfortable aesthetic of the Catppuccin Latte theme. This serves as a balanced focal point.
+- Background color: A subtle, desaturated version of the primary hue (#F9F5F7), creating a soft, almost-white canvas that is visually cohesive and soothing for prolonged viewing in a light mode setting.
+- Accent color: A deeper, more saturated violet (#9E46D2), providing a rich and distinctive contrast while remaining analogous to the primary color, perfect for interactive elements, pill UIs, and highlights within the Catppuccin palette.
+- Body and headline font: 'Inter' (sans-serif) for its modern, neutral, and highly legible characteristics, suitable for fluid typography across all UI elements and aligning with a Material Design aesthetic.
+- Standard Material Design-style iconography for UI actions and navigation, complemented by custom local SVG assets (e.g., weather conditions) for specific data representations. Tooltip buttons will use a clear, circular '?' icon.
+- Strictly desktop-only (min-width: 1024px), featuring a spacious 'Material Design 3 Expressive' aesthetic with rounded-3xl cards and generous padding. Layout dynamically adapts between 'single' or 'double column' based on user preference, with dedicated zones for top-area clock/greeting, persistent horizontal smart notifications, a grid of dynamic widgets, and a full-width masonry-style news feed.
+- Subtle visual feedback including pulsing skeleton loaders for data fetching, graceful lift and shadow changes on card hover states, and a distinct pulsating red dot animation for 'LIVE' badges within smart notifications to draw attention.
