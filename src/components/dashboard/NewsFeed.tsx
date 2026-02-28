@@ -37,20 +37,26 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       const result = await cachedFetch(
         `news_${q}_${page}`,
         async () => {
-          const res = await fetch(
-            `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=${config.newsLanguages[0] || 'en'}&max=10&apikey=${config.apiKeys.news}`
-          ).catch(err => {
-            throw new Error("Network error: Failed to reach the news service.");
-          });
-          
-          if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}));
-            throw new Error(errorData.errors?.[0] || `News API error: ${res.status}`);
+          try {
+            const res = await fetch(
+              `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=${config.newsLanguages[0] || 'en'}&max=10&apikey=${config.apiKeys.news}`
+            );
+            
+            if (!res.ok) {
+              const errorData = await res.json().catch(() => ({}));
+              throw new Error(errorData.errors?.[0] || `News API error: ${res.status}`);
+            }
+            
+            const json = await res.json();
+            if (!json.articles) throw new Error("No articles found in response");
+            return json.articles as Article[];
+          } catch (err: any) {
+            // Surface common fetch issues without crashing
+            if (err.name === 'TypeError' || err.message.includes('fetch')) {
+              throw new Error("Network error: Failed to reach the news service. This might be due to connection issues or API restrictions.");
+            }
+            throw err;
           }
-          
-          const json = await res.json();
-          if (!json.articles) throw new Error("No articles found in response");
-          return json.articles as Article[];
         },
         EXPIRY_TIMES.NEWS
       );
@@ -59,7 +65,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         setArticles(prev => page === 1 ? result : [...prev, ...result]);
       }
     } catch (err: any) {
-      console.error("News fetch error:", err);
+      // Do not use console.error to avoid triggering dev overlays for expected network failures
       setError(err.message || "Failed to fetch news. Please check your network or API key.");
     } finally {
       setLoading(false);
