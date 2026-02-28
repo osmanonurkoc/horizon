@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Card, CardContent } from "@/components/ui/card";
-import { CloudRain, Trophy, TrendingUp, Calendar, Loader2, AlertCircle, Sun } from "lucide-react";
+import { CloudRain, Trophy, TrendingUp, Loader2, Sun } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 
 interface Insight {
@@ -84,18 +85,23 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         } catch (e) {}
       }
 
-      // 2. Sports Insight (STRICTLY for Followed Teams)
+      // 2. Sports Insight (STRICTLY for Followed Teams Only)
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0) {
         try {
-          // Check all followed teams for the next match
-          for (const teamName of config.sportsTeams.slice(0, 2)) {
+          for (const teamName of config.sportsTeams) {
             const sportInsight = await cachedFetch(
-              `insight_sports_event_${teamName.replace(/\s+/g, '_')}`,
+              `insight_sports_event_next_${teamName.replace(/\s+/g, '_')}`,
               async () => {
                 const search = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
-                if (!search?.teams?.[0]) return null;
+                // Ensure strict name match or similar to avoid random team IDs
+                const team = search?.teams?.find((t: any) => 
+                  t.strTeam.toLowerCase() === teamName.toLowerCase() || 
+                  t.strAlternate?.toLowerCase() === teamName.toLowerCase()
+                ) || search?.teams?.[0];
+
+                if (!team) return null;
                 
-                const teamId = search.teams[0].idTeam;
+                const teamId = team.idTeam;
                 const next = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${teamId}`);
                 return next?.events?.[0] || null;
               },
@@ -110,7 +116,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 icon: Trophy,
                 color: 'red'
               });
-              // Only show the first available match to keep it brief
+              // Show only the first found match to keep the grid balanced
               break;
             }
           }
@@ -166,33 +172,35 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   if (insights.length === 0) return null;
 
   return (
-    <div className="flex gap-6 justify-center overflow-x-auto pb-6 scrollbar-hide no-scrollbar w-full px-6">
-      {insights.map((insight, idx) => {
-        const Icon = insight.icon;
-        const colorClass = 
-          insight.color === 'blue' ? 'bg-blue-500/10 border-l-blue-500 text-blue-700 dark:text-blue-400' :
-          insight.color === 'red' ? 'bg-red-500/10 border-l-red-500 text-red-700 dark:text-red-400' :
-          'bg-emerald-500/10 border-l-emerald-500 text-emerald-700 dark:text-emerald-400';
-        
-        const iconBg = 
-          insight.color === 'blue' ? 'bg-blue-500' :
-          insight.color === 'red' ? 'bg-red-500' :
-          'bg-emerald-500';
+    <div className="w-full max-w-6xl mx-auto px-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {insights.map((insight, idx) => {
+          const Icon = insight.icon;
+          const colorClass = 
+            insight.color === 'blue' ? 'bg-blue-500/10 border-l-blue-500 text-blue-700 dark:text-blue-400' :
+            insight.color === 'red' ? 'bg-red-500/10 border-l-red-500 text-red-700 dark:text-red-400' :
+            'bg-emerald-500/10 border-l-emerald-500 text-emerald-700 dark:text-emerald-400';
+          
+          const iconBg = 
+            insight.color === 'blue' ? 'bg-blue-500' :
+            insight.color === 'red' ? 'bg-red-500' :
+            'bg-emerald-500';
 
-        return (
-          <Card key={idx} className={`flex-none w-[380px] rounded-3xl border-none border-l-4 shadow-sm group transition-all hover:scale-[1.02] ${colorClass}`}>
-            <CardContent className="p-5 flex items-center gap-5">
-              <div className={`p-3 rounded-2xl text-white shadow-md ${iconBg}`}>
-                <Icon className="w-6 h-6" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest mb-0.5 opacity-80">{insight.title}</p>
-                <p className="text-sm font-bold text-foreground/80 leading-snug line-clamp-2">{insight.message}</p>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+          return (
+            <Card key={idx} className={`rounded-3xl border-none border-l-4 shadow-sm group transition-all hover:scale-[1.02] ${colorClass}`}>
+              <CardContent className="p-5 flex items-center gap-5">
+                <div className={`p-3 rounded-2xl text-white shadow-md ${iconBg}`}>
+                  <Icon className="w-6 h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-0.5 opacity-80">{insight.title}</p>
+                  <p className="text-sm font-bold text-foreground/80 leading-snug line-clamp-2">{insight.message}</p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

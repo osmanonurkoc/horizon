@@ -7,10 +7,24 @@ import { type DiscoverConfig, convertConfigToBriefingInput } from "@/lib/config-
 import { generatePersonalizedBriefing } from "@/ai/flows/personalized-briefing";
 import { Sparkles } from "lucide-react";
 
+const EASTER_EGGS = [
+  "Ready to push some flawless code today?",
+  "Time to fire up the 3D renderer and craft something amazing.",
+  "Don't forget your lean muscle workout today! Stay slim and strong.",
+  "Another perfect day for open-source contributions.",
+  "Ready to design some fresh UI themes?",
+  "Boot up the pen display, it's time to draw.",
+  "Welcome back. Your horizon is clear.",
+  "The world is waiting for your next big project.",
+  "Stay focused, stay inspired, and stay slim.",
+  "Let's make some architectural magic happen."
+];
+
 export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfig, refreshKey?: number }) {
   const [time, setTime] = useState(new Date());
   const [briefing, setBriefing] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [randomGreeting, setRandomGreeting] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -31,12 +45,16 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
       }
     };
     fetchBriefing();
+    
+    // Pick a random Easter Egg on mount or refresh
+    const selected = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
+    setRandomGreeting(selected);
   }, [config, refreshKey]);
 
   const hour = time.getHours();
-  let greeting = "Good evening";
-  if (hour < 12) greeting = "Good morning";
-  else if (hour < 18) greeting = "Good afternoon";
+  let timeGreeting = "Good evening";
+  if (hour < 12) timeGreeting = "Good morning";
+  else if (hour < 18) timeGreeting = "Good afternoon";
 
   return (
     <div className="py-12 px-6 flex flex-col items-center text-center">
@@ -53,7 +71,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         </div>
         
         <h2 className="text-2xl font-headline font-bold mb-4 text-foreground/90">
-          {greeting}, here is your personal horizon.
+          {timeGreeting}! {randomGreeting}
         </h2>
         
         {isLoading ? (
