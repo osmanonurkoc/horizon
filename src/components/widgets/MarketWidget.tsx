@@ -29,16 +29,24 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
   const [historicalData, setHistoricalData] = useState<HistoricalData[]>([]);
   const [histLoading, setHistLoading] = useState(false);
   const [histError, setHistError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const tickerList = useMemo(() => 
     config.stocks.map(s => s.split(' ')[0].toUpperCase()), 
     [config.stocks]
   );
 
+  // Initial symbol selection
+  useEffect(() => {
+    if (tickerList.length > 0 && !selectedSymbol) {
+      setSelectedSymbol(tickerList[0]);
+    }
+  }, [tickerList, selectedSymbol]);
+
+  // Fetch quotes for the card view
   useEffect(() => {
     setError(null);
     setLoading(true);
-    setStocks([]);
 
     if (!config.apiKeys.market || tickerList.length === 0) {
       setLoading(false);
@@ -60,7 +68,8 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 const data = await res.json();
                 
                 if (data.error) throw new Error(data.error);
-                if (data.c === 0 && data.pc === 0) return null; // No data for symbol
+                // Finnhub returns 0 for price/prevClose if symbol invalid
+                if (!data.c && !data.pc) return null; 
 
                 return {
                   symbol: ticker,
@@ -90,13 +99,11 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     };
 
     fetchStocks();
-    if (tickerList.length > 0 && !selectedSymbol) {
-      setSelectedSymbol(tickerList[0]);
-    }
-  }, [config.apiKeys.market, tickerList, selectedSymbol]);
+  }, [config.apiKeys.market, tickerList]);
 
+  // Fetch historical data for the chart view
   useEffect(() => {
-    if (!selectedSymbol || !config.apiKeys.market) return;
+    if (!selectedSymbol || !config.apiKeys.market || !isModalOpen) return;
 
     const fetchHistory = async () => {
       setHistLoading(true);
@@ -116,8 +123,10 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             );
             const json = await res.json();
             
+            // Check status code returned by Finnhub
             if (json.s === "no_data") throw new Error("No historical data found");
-            if (json.s !== "ok") throw new Error("Invalid Stream Response");
+            if (json.s !== "ok") throw new Error(json.error || "Invalid Stream Response");
+            if (!json.c || !json.t) throw new Error("Incomplete data received");
 
             return json.c.map((price: number, i: number) => ({
               date: new Date(json.t[i] * 1000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }),
@@ -135,7 +144,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     };
 
     fetchHistory();
-  }, [selectedSymbol, config.apiKeys.market]);
+  }, [selectedSymbol, config.apiKeys.market, isModalOpen]);
 
   if (!config.apiKeys.market || tickerList.length === 0) {
     return (
@@ -152,7 +161,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
   if (loading) return <div className="h-48 rounded-3xl-card animate-skeleton bg-muted/40" />;
 
   return (
-    <Dialog>
+    <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
       <DialogTrigger asChild>
         <Card className="rounded-3xl-card bg-card overflow-hidden cursor-pointer group hover:border-primary/50 transition-all">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -198,7 +207,11 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               {stocks.length > 0 ? stocks.map(stock => (
                 <button
                   key={stock.symbol}
-                  onClick={() => setSelectedSymbol(stock.symbol)}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedSymbol(stock.symbol);
+                  }}
                   className={cn(
                     "w-full text-left p-4 rounded-xl transition-all font-bold text-sm flex justify-between items-center group",
                     selectedSymbol === stock.symbol 
@@ -222,11 +235,11 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           <div className="flex-1 p-10 flex flex-col bg-card">
             <DialogHeader className="mb-10">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex flex-col gap-1">
                   <DialogTitle className="text-4xl font-headline font-black tracking-tight">
                     {selectedSymbol || "Market Insights"}
                   </DialogTitle>
-                  <DialogDescription className="text-muted-foreground mt-1">
+                  <DialogDescription className="text-muted-foreground">
                     {selectedSymbol 
                       ? `30-Day performance history for ${selectedSymbol}.` 
                       : "Detailed historical stock performance data."}
