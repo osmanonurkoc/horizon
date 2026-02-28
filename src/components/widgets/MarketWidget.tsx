@@ -69,7 +69,8 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 );
                 const json = await res.json();
                 
-                if (json.Note || json.Information || json["Information"]) {
+                // Alpha Vantage specific error fields
+                if (json.Note || json.Information || json["Error Message"]) {
                   throw new Error("API Limit Reached");
                 }
 
@@ -131,7 +132,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             );
             const json = await res.json();
             
-            if (json.Note || json.Information) throw new Error("API Limit Reached");
+            if (json.Note || json.Information || json["Error Message"]) throw new Error("API Limit Reached");
             
             const timeSeries = json["Time Series (Daily)"];
             if (!timeSeries) throw new Error("No historical data");

@@ -5,8 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, PlayCircle, Clock } from "lucide-react";
 
 export function SmartNotifications({ config }: { config: DiscoverConfig }) {
+  // Center the entire container of cards using justify-center
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide no-scrollbar">
+    <div className="flex gap-4 justify-center overflow-x-auto pb-4 scrollbar-hide no-scrollbar">
       {config.enabledWidgets.weather && config.location && (
         <Card className="flex-none w-[350px] rounded-2xl border-none bg-blue-500/10 border-l-4 border-l-blue-500 shadow-sm group hover:bg-blue-500/15 transition-all">
           <CardContent className="p-4 flex items-center gap-4">
@@ -40,9 +41,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           </Card>
 
           <Card className="flex-none w-[350px] rounded-2xl border-none bg-card border-l-4 border-l-secondary shadow-sm group hover:bg-secondary/5 transition-all">
-            <CardContent className="p-6 flex flex-col items-center justify-center text-center gap-3">
+            <CardContent className="p-4 flex items-center gap-4">
               <div className="p-2.5 bg-secondary rounded-xl text-white">
-                <Clock className="w-7 h-7" />
+                <Clock className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-[10px] font-black text-secondary uppercase tracking-widest">Upcoming</p>
