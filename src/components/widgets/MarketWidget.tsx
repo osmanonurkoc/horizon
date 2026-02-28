@@ -60,16 +60,19 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           tickerList.map(async (ticker) => {
             const apiKeySignature = apiKey.slice(-8);
             return cachedFetch(
-              `finnhub_quote_v1_${ticker}_${apiKeySignature}`,
+              `finnhub_quote_v2_${ticker}_${apiKeySignature}`,
               async () => {
                 const res = await fetch(
                   `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${apiKey}`
                 );
+                
+                if (res.status === 403) throw new Error("Access Denied (403)");
+                if (!res.ok) throw new Error(`API Error (${res.status})`);
+                
                 const data = await res.json();
                 
                 if (data.error) throw new Error(data.error);
-                // Finnhub returns 0 for price/prevClose if symbol invalid
-                if (!data.c && !data.pc) return null; 
+                if (!data.c && data.c !== 0) return null; 
 
                 return {
                   symbol: ticker,
@@ -79,14 +82,17 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 };
               },
               EXPIRY_TIMES.MARKET
-            ).catch(() => null);
+            ).catch((err) => {
+              console.error(`Fetch error for ${ticker}:`, err);
+              return null;
+            });
           })
         );
         
         const validStocks = results.filter((s): s is StockData => s !== null);
         
         if (validStocks.length === 0) {
-          setError("No signals found for selected tickers.");
+          setError("No signals found or Access Denied. Check your Finnhub key.");
         } else {
           setStocks(validStocks);
           setError(null);
@@ -116,17 +122,21 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         const from = to - (30 * 24 * 60 * 60);
 
         const data = await cachedFetch(
-          `finnhub_hist_v1_${selectedSymbol}_${apiKeySignature}`,
+          `finnhub_hist_v2_${selectedSymbol}_${apiKeySignature}`,
           async () => {
-            const res = await fetch(
-              `https://finnhub.io/api/v1/stock/candle?symbol=${selectedSymbol}&resolution=D&from=${from}&to=${to}&token=${apiKey}`
-            );
+            const url = `https://finnhub.io/api/v1/stock/candle?symbol=${selectedSymbol}&resolution=D&from=${from}&to=${to}&token=${apiKey}`;
+            const res = await fetch(url);
+            
+            if (res.status === 403) {
+              throw new Error("Access Denied (403): This ticker requires a premium Finnhub plan for historical data.");
+            }
+            if (!res.ok) throw new Error(`Stream Error (${res.status})`);
+
             const json = await res.json();
             
-            // Check status code returned by Finnhub
-            if (json.s === "no_data") throw new Error("No historical data found");
-            if (json.s !== "ok") throw new Error(json.error || "Invalid Stream Response");
-            if (!json.c || !json.t) throw new Error("Incomplete data received");
+            if (json.s === "no_data") throw new Error("No historical records found for this period.");
+            if (json.s !== "ok") throw new Error(json.error || "Invalid Stream Metadata");
+            if (!json.c || !json.t) throw new Error("Incomplete stream sequence received.");
 
             return json.c.map((price: number, i: number) => ({
               date: new Date(json.t[i] * 1000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }),
@@ -137,7 +147,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         );
         setHistoricalData(data);
       } catch (err: any) {
-        setHistError(err.message || "History Stream Unavailable");
+        setHistError(err.message || "History Stream Offline");
       } finally {
         setHistLoading(false);
       }
@@ -209,6 +219,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                   key={stock.symbol}
                   type="button"
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     setSelectedSymbol(stock.symbol);
                   }}
@@ -287,9 +298,11 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-12 bg-muted/5 rounded-3xl border border-dashed">
                   <AlertCircle className="w-12 h-12 text-destructive mb-4 opacity-40" />
-                  <p className="text-xl font-bold text-foreground/80">{histError || "Awaiting Real Data Stream..."}</p>
-                  <p className="text-sm text-muted-foreground mt-2 max-w-xs">
-                    Historical data is pulled directly from the live markets via Finnhub.io.
+                  <p className="text-lg font-bold text-foreground/80 leading-tight">
+                    {histError || "Awaiting Real Data Stream..."}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-4 max-w-sm">
+                    Historical data is pulled directly from Finnhub.io. Free tier access varies by exchange and ticker.
                   </p>
                 </div>
               )}
