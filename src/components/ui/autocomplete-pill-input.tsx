@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -125,6 +124,9 @@ export function AutocompletePillInput({
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
 
+  // Defensive de-duplication of options to prevent React key errors
+  const uniqueOptions = React.useMemo(() => Array.from(new Set(options)), [options]);
+
   const handleSelect = (val: string) => {
     if (isMulti) {
       if (values.includes(val)) {
@@ -171,7 +173,7 @@ export function AutocompletePillInput({
             <CommandList>
               <CommandEmpty>No results found.</CommandEmpty>
               <CommandGroup>
-                {options.map((option) => (
+                {uniqueOptions.map((option) => (
                   <CommandItem
                     key={option}
                     value={option}

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -22,22 +21,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const MOCK_DATA = {
   locations: [
     "London, UK", "New York, US", "Tokyo, JP", "Paris, FR", "Berlin, DE", "San Francisco, US", "Sydney, AU", "Toronto, CA",
-    "Singapore, SG", "Dubai, AE", "Hong Kong, HK", "Seoul, KR", "Amsterdam, NL", "Stockholm, SE", "Oslo, NO", "Madrid, ES"
+    "Singapore, SG", "Dubai, AE", "Hong Kong, HK", "Seoul, KR", "Amsterdam, NL", "Stockholm, SE", "Oslo, NO", "Madrid, ES",
+    "Rome, IT", "Vienna, AT", "Prague, CZ", "Warsaw, PL", "Dublin, IE", "Copenhagen, DK", "Helsinki, FI", "Brussels, BE"
   ],
   stocks: [
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK.B", "UNH", "V", "JNJ", "WMT", "JPM", "MA", "PG", "AVGO", 
-    "ORCL", "HD", "CVX", "ABBV", "LLY", "MRK", "PEP", "KO", "BAC", "COST", "TMO", "AVGO", "CSCO", "ACN", "ABT", "ADBE"
+    "ORCL", "HD", "CVX", "ABBV", "LLY", "MRK", "PEP", "KO", "BAC", "COST", "TMO", "CSCO", "ACN", "ABT", "ADBE",
+    "INTC", "AMD", "QCOM", "TXN", "MU", "CRM", "NFLX", "DIS", "PYPL", "SQ", "SHOP", "SPOT", "UBER", "LYFT", "ABNB"
   ],
   sports: [
     "Real Madrid", "Manchester City", "Bayern Munich", "Arsenal", "Paris Saint-Germain", "Barcelona", "Inter Milan", 
     "Liverpool", "Bayer Leverkusen", "Atletico Madrid", "Borussia Dortmund", "Juventus", "AC Milan", "Napoli", 
     "Benfica", "Porto", "Ajax", "PSV Eindhoven", "Sporting CP", "Aston Villa", "Tottenham Hotspur", "Chelsea", 
-    "Manchester United", "Newcastle United", "Lazio", "Roma", "Feyenoord", "Galatasaray", "Fenerbahce"
+    "Manchester United", "Newcastle United", "Lazio", "Roma", "Feyenoord", "Galatasaray", "Fenerbahce",
+    "RB Leipzig", "Real Sociedad", "Celtic", "Rangers", "Lille", "Monaco", "Atalanta"
   ],
   topics: [
     "Technology", "Artificial Intelligence", "Finance", "Space Exploration", "Climate Change", "Cybersecurity", 
     "Health & Wellness", "Global Economy", "Renewable Energy", "Quantum Computing", "Electric Vehicles", 
-    "Sustainability", "Venture Capital", "Biotechnology", "Robotics", "E-commerce", "Semiconductors"
+    "Sustainability", "Venture Capital", "Biotechnology", "Robotics", "E-commerce", "Semiconductors",
+    "Gadgets", "Software Development", "Future Tech"
   ],
   languages: ["en", "es", "fr", "de", "it", "ja", "ko", "pt", "ru", "zh"]
 };
