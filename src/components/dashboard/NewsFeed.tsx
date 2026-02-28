@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -43,7 +42,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v15_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          `gnews_v20_${encodeURIComponent(q)}_${lang}_p${pageNum}`,
           async () => {
             return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
           },
@@ -61,16 +60,13 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
           const baseArticles = isInitial ? [] : prev;
           const merged = [...baseArticles, ...combinedArticles];
           
-          // Deduplicate by URL
           const uniqueArticles = Array.from(new Map(merged.map(a => [a.url, a])).values());
           
-          // Sort by date descending
           return uniqueArticles.sort((a, b) => 
             new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
           );
         });
         
-        // If combined articles is significantly low, we might be at the end
         if (combinedArticles.length < (languages.length * 5)) {
           setHasMore(false);
         }
@@ -82,7 +78,6 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     }
   }, [config.apiKeys.news, config.newsTopics, config.newsLanguages]);
 
-  // Initial fetch trigger
   useEffect(() => {
     setArticles([]);
     setPage(1);
@@ -90,7 +85,6 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     fetchNews(1, true);
   }, [fetchNews]);
 
-  // Infinite scroll trigger
   useEffect(() => {
     if (page > 1) {
       fetchNews(page);
@@ -171,7 +165,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
                     <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full">
                       {article.source.name}
                     </span>
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                       {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Recent'}
                     </span>
                   </div>

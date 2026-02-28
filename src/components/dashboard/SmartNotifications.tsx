@@ -1,4 +1,3 @@
-
 "use client";
 
 import { type DiscoverConfig } from "@/lib/config-store";
@@ -15,8 +14,8 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               <AlertCircle className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-0.5">Weather Alert</p>
-              <p className="text-sm font-bold text-foreground/80 leading-snug">Clear skies expected in {config.location} all day.</p>
+              <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-0.5">Weather Update</p>
+              <p className="text-sm font-bold text-foreground/80 leading-snug">Forecast for {config.location} is currently stable.</p>
             </div>
           </CardContent>
         </Card>
@@ -34,8 +33,8 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-black text-red-700 dark:text-red-400 uppercase tracking-widest mb-0.5">Live Match</p>
-                <p className="text-sm font-bold text-foreground/80 leading-snug">{config.sportsTeams[0]} is currently playing.</p>
+                <p className="text-[10px] font-black text-red-700 dark:text-red-400 uppercase tracking-widest mb-0.5">Club Watch</p>
+                <p className="text-sm font-bold text-foreground/80 leading-snug">{config.sportsTeams[0]} results updated.</p>
               </div>
             </CardContent>
           </Card>
@@ -46,8 +45,8 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 <Clock className="w-6 h-6" />
               </div>
               <div className="flex-1">
-                <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-0.5">Upcoming Event</p>
-                <p className="text-sm font-black text-secondary leading-snug">Next scheduled game in 24 hours.</p>
+                <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-0.5">Insight Cycle</p>
+                <p className="text-sm font-black text-secondary leading-snug">Auto-refresh heartbeat active.</p>
               </div>
             </CardContent>
           </Card>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -36,22 +35,16 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
         const teamData = await Promise.all(
           config.sportsTeams.map(async (teamName) => {
             return cachedFetch(
-              `sports_v4_${teamName.replace(/\s+/g, '_')}`,
+              `sports_v10_${teamName.replace(/\s+/g, '_')}`,
               async () => {
-                // Step 1: Search for Team ID
                 const searchRes = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
                 const searchJson = await searchRes.json();
                 
                 if (!searchJson.teams || searchJson.teams.length === 0) return null;
                 
-                // Find the best match if multiple teams returned
-                const team = searchJson.teams.find((t: any) => 
-                  t.strTeam.toLowerCase() === teamName.toLowerCase()
-                ) || searchJson.teams[0];
-                
+                const team = searchJson.teams[0];
                 const teamId = team.idTeam;
 
-                // Step 2: Fetch Last Events
                 const eventsRes = await fetch(`https://www.thesportsdb.com/api/v1/json/3/eventslast.php?id=${teamId}`);
                 const eventsJson = await eventsRes.json();
                 
@@ -78,7 +71,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
 
         setResults(teamData.filter((r): r is TeamResult => r !== null));
       } catch (err: any) {
-        setError("Stadium link unstable.");
+        setError("Stadium link offline.");
       } finally {
         setLoading(false);
       }
@@ -146,20 +139,20 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
       </DialogTrigger>
       <DialogContent className="rounded-3xl border-none max-w-2xl bg-card">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-headline font-bold">Club News & Schedule</DialogTitle>
+          <DialogTitle className="text-2xl font-headline font-bold">Stadium Insights</DialogTitle>
           <DialogDescription>
-            Live scores, upcoming fixtures, and squad status for your favorite teams.
+            Live scores, upcoming fixtures, and verified performance history for your teams.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-6">
           <div className="p-6 bg-secondary/5 rounded-3xl border border-secondary/10 space-y-4">
-            <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4 text-secondary" /> Recent Form Accuracy</h4>
+            <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4 text-secondary" /> Recent Performance Data</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Results reflect the most recently completed matches. Live data streams are updated every 30 minutes to reflect finalized scores.
+              Global stadium results are updated within 60 minutes of match completion. Live tracking indicators appear during scheduled game times.
             </p>
           </div>
           <div className="space-y-3">
-            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Historical Performance</h4>
+            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Historical Stream</h4>
             {results.map((res, idx) => (
               <div key={idx} className="flex justify-between items-center p-4 bg-muted/20 rounded-2xl hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-3">
@@ -168,7 +161,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                 </div>
                 <div className="text-right">
                   <span className="block font-black text-lg">{res.lastScore}</span>
-                  <span className="text-[10px] opacity-60 font-bold uppercase">{res.date}</span>
+                  <span className="text-[10px] opacity-60 font-bold uppercase tracking-widest">{res.date}</span>
                 </div>
               </div>
             ))}

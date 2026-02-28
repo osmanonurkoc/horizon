@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -25,27 +24,34 @@ interface HistoricalData {
 
 /**
  * Robust fetcher that tries multiple proxies for Yahoo Finance.
+ * Prevents "Unexpected token <" by checking content types.
  */
 async function fetchYahooProxy(targetUrl: string) {
   const encodedUrl = encodeURIComponent(targetUrl);
-  
-  // Strategy 1: AllOrigins (Raw)
-  try {
-    const res = await fetch(`https://api.allorigins.win/raw?url=${encodedUrl}`);
-    if (res.ok) return await res.json();
-  } catch (e) {
-    console.warn("Market Proxy 1 (AllOrigins) failed, attempting fallback...");
-  }
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encodedUrl}`,
+    `https://corsproxy.io/?${encodedUrl}`
+  ];
 
-  // Strategy 2: CorsProxy.io
-  try {
-    const res = await fetch(`https://corsproxy.io/?${encodedUrl}`);
-    if (res.ok) return await res.json();
-  } catch (e) {
-    console.error("Market Proxy 2 (CorsProxy) failed.");
+  for (const proxyUrl of proxies) {
+    try {
+      const res = await fetch(proxyUrl);
+      if (!res.ok) continue;
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.warn(`Proxy ${proxyUrl} returned non-JSON content. Skipping...`);
+        continue;
+      }
+
+      const json = await res.json();
+      if (json && !json.error) return json;
+    } catch (e) {
+      console.warn(`Proxy ${proxyUrl} failed:`, e);
+    }
   }
   
-  throw new Error("Market Hub Connectivity Lost (403/Timeout)");
+  throw new Error("Market Hub Connectivity Lost (403/Forbidden)");
 }
 
 export function MarketWidget({ config }: { config: DiscoverConfig }) {
@@ -83,7 +89,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         tickerList.map(async (symbol) => {
           try {
             return await cachedFetch(
-              `yahoo_v10_quote_${symbol}`,
+              `yahoo_v15_quote_${symbol}`,
               async () => {
                 const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
                 const json = await fetchYahooProxy(targetUrl);
@@ -106,7 +112,6 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               EXPIRY_TIMES.MARKET
             );
           } catch (e) {
-            console.warn(`Failed to fetch ${symbol}:`, e);
             return null;
           }
         })
@@ -114,12 +119,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       
       const validStocks = quoteResults.filter((s): s is StockData => s !== null);
       if (validStocks.length === 0 && tickerList.length > 0) {
-        setError("Market synchronization failed (403).");
+        setError("Market Hub Access Denied (403). Try Refreshing.");
       } else {
         setStocks(validStocks);
       }
     } catch (err: any) {
-      setError("Unable to reach Market Hub.");
+      setError("Market Hub Offline.");
     } finally {
       setLoading(false);
     }
@@ -138,7 +143,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     
     try {
       const data = await cachedFetch(
-        `yahoo_v10_hist_${selectedSymbol}`,
+        `yahoo_v15_hist_${selectedSymbol}`,
         async () => {
           const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1mo`;
           const json = await fetchYahooProxy(targetUrl);
@@ -164,7 +169,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       
       setHistoricalData(data);
     } catch (err: any) {
-      setHistError(err.message || "Unable to sync historical trends.");
+      setHistError(err.message || "Historical Link Offline.");
     } finally {
       setHistLoading(false);
     }
@@ -280,7 +285,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                     {selectedSymbol}
                   </DialogTitle>
                   <DialogDescription className="text-muted-foreground">
-                    30-Day performance history and performance metrics.
+                    Real-time performance metrics and 30-day historical chart.
                   </DialogDescription>
                 </div>
                 {histLoading && <Loader2 className="w-6 h-6 animate-spin text-primary" />}
@@ -340,22 +345,22 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                     </>
                   )}
                   <p className="text-xs text-muted-foreground mt-4 max-w-sm">
-                    Global Market Stream provided via Yahoo Finance Hub.
+                    Global Market Stream via Yahoo Finance Network.
                   </p>
                 </div>
               )}
             </div>
             
             <div className="mt-10 grid grid-cols-2 gap-6">
-              <div className="p-5 bg-primary/5 rounded-2xl border border-primary/10 transition-colors hover:bg-primary/10">
+              <div className="p-5 bg-primary/5 rounded-2xl border border-primary/10">
                 <p className="text-[10px] font-black uppercase text-primary mb-1 tracking-widest">Connectivity</p>
                 <p className="font-bold flex items-center gap-2 text-foreground/90 text-sm">
-                  <Activity className="w-4 h-4" /> Real-time Market Data
+                  <Activity className="w-4 h-4" /> Real-time Verified
                 </p>
               </div>
-              <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 transition-colors hover:bg-secondary/10">
-                <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Provider</p>
-                <p className="font-bold text-foreground/90 text-sm">Yahoo Finance Hub</p>
+              <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10">
+                <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Network</p>
+                <p className="font-bold text-foreground/90 text-sm">Yahoo Finance Proxy</p>
               </div>
             </div>
           </div>
