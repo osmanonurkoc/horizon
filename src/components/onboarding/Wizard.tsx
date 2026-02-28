@@ -25,6 +25,35 @@ interface WizardProps {
   onComplete: (config: DiscoverConfig) => void;
 }
 
+/**
+ * Robust fetcher that tries multiple proxies to avoid CORS and HTML-instead-of-JSON errors.
+ */
+async function robustProxyFetch(targetUrl: string) {
+  const encodedUrl = encodeURIComponent(targetUrl);
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encodedUrl}`,
+    `https://corsproxy.io/?${encodedUrl}`
+  ];
+
+  for (const proxyUrl of proxies) {
+    try {
+      const res = await fetch(proxyUrl);
+      if (!res.ok) continue;
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.warn(`Proxy ${proxyUrl} returned non-JSON content. Skipping...`);
+        continue;
+      }
+
+      return await res.json();
+    } catch (e) {
+      console.warn(`Proxy ${proxyUrl} failed:`, e);
+    }
+  }
+  return null;
+}
+
 export default function Wizard({ onComplete }: WizardProps) {
   const [step, setStep] = useState(1);
   const [config, setConfig] = useState<DiscoverConfig>(DEFAULT_CONFIG);
@@ -70,8 +99,8 @@ export default function Wizard({ onComplete }: WizardProps) {
       if (!config.apiKeys.weather) return;
       setIsSearching(true);
       try {
-        const res = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`);
-        const data = await res.json();
+        const targetUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`;
+        const data = await robustProxyFetch(targetUrl);
         if (Array.isArray(data)) {
           setLocationResults(data.map((l: any) => `${l.name}, ${l.country}`));
         }
@@ -90,14 +119,13 @@ export default function Wizard({ onComplete }: WizardProps) {
     searchTimeout.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        // Yahoo Finance symbol lookup via proxy
-        const res = await fetch(`https://corsproxy.io/?https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        if (data.quotes) {
-          setStockResults(data.quotes.map((m: any) => `${m.symbol} (${m.shortname || m.longname})`));
+        const targetUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`;
+        const data = await robustProxyFetch(targetUrl);
+        if (data?.quotes) {
+          setStockResults(data.quotes.map((m: any) => `${m.symbol} (${m.shortname || m.longname || m.symbol})`));
         }
       } catch (err) {
-        console.error(err);
+        console.error("Stock search failed:", err);
       } finally {
         setIsSearching(false);
       }
@@ -111,13 +139,13 @@ export default function Wizard({ onComplete }: WizardProps) {
     searchTimeout.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        if (data.teams) {
+        const targetUrl = `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(q)}`;
+        const data = await robustProxyFetch(targetUrl);
+        if (data?.teams) {
           setSportsResults(data.teams.map((t: any) => t.strTeam));
         }
       } catch (err) {
-        console.error(err);
+        console.error("Sports search failed:", err);
       } finally {
         setIsSearching(false);
       }
@@ -350,14 +378,14 @@ export default function Wizard({ onComplete }: WizardProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {config.enabledWidgets.market && (
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Market Tickers (Yahoo Finance)</Label>
+                    <Label className="text-base font-semibold">Market Tickers (Global)</Label>
                     <AutocompletePillInput 
                       options={stockResults}
                       values={config.stocks}
                       onSearch={fetchStocks}
                       isLoading={isSearching}
                       onChange={(vals) => setConfig(c => ({ ...c, stocks: vals }))}
-                      placeholder="Search stocks (e.g. AAPL, THYAO.IS)..."
+                      placeholder="Search tickers (e.g. AAPL, THYAO.IS)..."
                     />
                   </div>
                 )}
@@ -391,7 +419,7 @@ export default function Wizard({ onComplete }: WizardProps) {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {config.bookmarks.map((b, i) => (
-                      <Pill key={i} label={b.name} onRemove={() => setConfig(c => ({ ...c, bookmarks: c.bookmarks.filter((_, idx) => idx !== i) }))} />
+                      <Pill key={i} label={b.name} onRemove={() => setConfig(c => ({ ...c, bookmarks: config.bookmarks.filter((_, idx) => idx !== i) }))} />
                     ))}
                   </div>
                 </div>
