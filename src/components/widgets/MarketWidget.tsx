@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -38,19 +37,25 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 );
                 const json = await res.json();
                 const quote = json["Global Quote"];
-                if (!quote) throw new Error("Limit reached");
+                
+                // Validate that we have the necessary fields
+                if (!quote || quote["05. price"] === undefined) {
+                  return null;
+                }
+
                 return {
                   symbol: quote["01. symbol"],
-                  price: parseFloat(quote["05. price"]),
-                  change: parseFloat(quote["09. change"]),
-                  changePercent: quote["10. change percent"],
+                  price: parseFloat(quote["05. price"]) || 0,
+                  change: parseFloat(quote["09. change"]) || 0,
+                  changePercent: quote["10. change percent"] || "0%",
                 };
               },
               EXPIRY_TIMES.MARKET
             )
           )
         );
-        setStocks(results.filter((s): s is StockData => !!s));
+        // Filter out any null results from API limits or missing data
+        setStocks(results.filter((s): s is StockData => s !== null));
       } catch (err) {
         setError("Data limit reached");
       } finally {
@@ -87,11 +92,11 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             {error && stocks.length === 0 ? (
               <div className="text-center py-4 text-muted-foreground italic">{error}</div>
             ) : (
-              stocks.map((stock, idx) => (
-                <div key={`${stock.symbol}-${idx}`} className="flex items-center justify-between group/item">
+              stocks.map((stock) => (
+                <div key={stock.symbol} className="flex items-center justify-between group/item">
                   <div>
                     <p className="font-black text-xl font-headline group-hover/item:text-primary transition-colors">{stock.symbol}</p>
-                    <p className="text-sm font-bold">${stock.price.toLocaleString()}</p>
+                    <p className="text-sm font-bold">${stock.price?.toLocaleString() ?? "0.00"}</p>
                   </div>
                   <div className={`flex flex-col items-end ${stock.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     <div className="flex items-center gap-1 font-bold">
@@ -135,8 +140,8 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           </div>
           <div className="space-y-2">
             <h4 className="font-bold flex items-center gap-2 text-sm uppercase tracking-widest text-muted-foreground">Market Pulse</h4>
-            {stocks.map((s, idx) => (
-              <div key={`${s.symbol}-pulse-${idx}`} className="flex justify-between p-3 border-b border-muted last:border-0">
+            {stocks.map((s) => (
+              <div key={`${s.symbol}-pulse`} className="flex justify-between p-3 border-b border-muted last:border-0">
                 <span className="font-bold">{s.symbol}</span>
                 <span className="font-mono text-xs opacity-60">P/E: 24.5 | Market Cap: $2.1T</span>
               </div>
