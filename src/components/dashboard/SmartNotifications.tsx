@@ -1,4 +1,3 @@
-
 "use client";
 
 import { type DiscoverConfig } from "@/lib/config-store";
@@ -41,12 +40,11 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           </Card>
 
           <Card className="flex-none w-[350px] rounded-2xl border-none bg-card border-l-4 border-l-secondary shadow-sm group hover:bg-secondary/5 transition-all">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-2 bg-secondary rounded-xl text-white">
-                <Clock className="w-6 h-6" />
+            <CardContent className="p-6 flex flex-col items-center justify-center text-center gap-3">
+              <div className="p-2.5 bg-secondary rounded-xl text-white">
+                <Clock className="w-7 h-7" />
               </div>
               <div>
-                {/* Clean "Upcoming" text color matching secondary branding, no background pill */}
                 <p className="text-[10px] font-black text-secondary uppercase tracking-widest">Upcoming</p>
                 <p className="text-sm font-bold text-secondary">Next game in 24 hours.</p>
               </div>
