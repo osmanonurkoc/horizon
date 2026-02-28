@@ -40,6 +40,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
       const languages = config.newsLanguages.length > 0 ? config.newsLanguages : ['en'];
       
+      // Parallel requests for multi-language support as GNews only supports one lang per request
       const languageRequests = languages.map(lang => 
         cachedFetch(
           `gnews_v6_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
@@ -60,8 +61,10 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
           const baseArticles = isInitial ? [] : prev;
           const merged = [...baseArticles, ...combinedArticles];
           
+          // Deduplicate by URL
           const uniqueArticles = Array.from(new Map(merged.map(a => [a.url, a])).values());
           
+          // Sort by date descending
           return uniqueArticles.sort((a, b) => 
             new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
           );
@@ -74,20 +77,24 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     }
   }, [config]);
 
+  // Initial fetch
   useEffect(() => {
     setPage(1);
     fetchNews(1, true);
   }, [fetchNews]);
 
+  // Handle page changes (Infinite Scroll)
+  useEffect(() => {
+    if (page > 1) {
+      fetchNews(page);
+    }
+  }, [page, fetchNews]);
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && hasMore && !loading && articles.length > 0) {
-          setPage(prev => {
-            const nextPage = prev + 1;
-            fetchNews(nextPage);
-            return nextPage;
-          });
+          setPage(prev => prev + 1);
         }
       },
       { threshold: 0.1 }
@@ -98,7 +105,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     }
 
     return () => observer.disconnect();
-  }, [hasMore, loading, fetchNews, articles.length]);
+  }, [hasMore, loading, articles.length]);
 
   if (!config.apiKeys.news) {
     return (
@@ -127,6 +134,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="space-y-12">
+      {/* Masonry Grid Implementation */}
       <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-0">
         {articles.map((article, idx) => (
           <a 
@@ -178,6 +186,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         ))}
       </div>
       
+      {/* Scroll Trigger */}
       <div ref={observerTarget} className="h-20 flex items-center justify-center">
         {loading && articles.length > 0 && (
           <div className="flex flex-col items-center gap-2 text-primary">
