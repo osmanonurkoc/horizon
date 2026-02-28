@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, ArrowRight, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
+import { Trophy, ArrowRight, ShieldCheck, Loader2, AlertCircle, History } from "lucide-react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
@@ -36,14 +36,20 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
         const teamData = await Promise.all(
           config.sportsTeams.map(async (teamName) => {
             return cachedFetch(
-              `sports_v3_${teamName.replace(/\s+/g, '_')}`,
+              `sports_v4_${teamName.replace(/\s+/g, '_')}`,
               async () => {
                 // Step 1: Search for Team ID
                 const searchRes = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
                 const searchJson = await searchRes.json();
                 
                 if (!searchJson.teams || searchJson.teams.length === 0) return null;
-                const teamId = searchJson.teams[0].idTeam;
+                
+                // Find the best match if multiple teams returned
+                const team = searchJson.teams.find((t: any) => 
+                  t.strTeam.toLowerCase() === teamName.toLowerCase()
+                ) || searchJson.teams[0];
+                
+                const teamId = team.idTeam;
 
                 // Step 2: Fetch Last Events
                 const eventsRes = await fetch(`https://www.thesportsdb.com/api/v1/json/3/eventslast.php?id=${teamId}`);
@@ -57,15 +63,15 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                 const score = `${lastMatch.intHomeScore} - ${lastMatch.intAwayScore}`;
 
                 return {
-                  teamName: teamName,
+                  teamName: team.strTeam,
                   lastScore: score,
                   opponent: opponent,
-                  isLive: false, // TheSportsDB free tier usually shows past events
+                  isLive: false,
                   status: lastMatch.strStatus || 'FT',
                   date: lastMatch.dateEvent
                 } as TeamResult;
               },
-              EXPIRY_TIMES.WEATHER // Using weather expiry for sports (30 mins)
+              EXPIRY_TIMES.WEATHER
             );
           })
         );
@@ -147,13 +153,13 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
         </DialogHeader>
         <div className="space-y-6 py-6">
           <div className="p-6 bg-secondary/5 rounded-3xl border border-secondary/10 space-y-4">
-            <h4 className="font-bold flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-secondary" /> Data Integrity</h4>
+            <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4 text-secondary" /> Recent Form Accuracy</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Results are synchronized with global sports databases. Free tier updates may experience a 15-30 minute delay from live events.
+              Results reflect the most recently completed matches. Live data streams are updated every 30 minutes to reflect finalized scores.
             </p>
           </div>
           <div className="space-y-3">
-            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Recent Form History</h4>
+            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Historical Performance</h4>
             {results.map((res, idx) => (
               <div key={idx} className="flex justify-between items-center p-4 bg-muted/20 rounded-2xl hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-3">

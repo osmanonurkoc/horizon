@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, BarChart3, ArrowRight, Activity, AlertCircle, Loader2 } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
@@ -56,11 +57,14 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
 
       try {
         const symbols = tickerList.join(',');
+        const targetUrl = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
+        
         const data = await cachedFetch(
-          `yahoo_quotes_v1_${symbols.replace(/,/g, '_')}`,
+          `yahoo_quotes_v2_${symbols.replace(/,/g, '_')}`,
           async () => {
+            // Using encodeURIComponent on the full target URL for the proxy
             const res = await fetch(
-              `https://corsproxy.io/?https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`
+              `https://corsproxy.io/?${encodeURIComponent(targetUrl)}&_=${Date.now()}`
             );
             if (!res.ok) throw new Error(`Market Hub Offline (${res.status})`);
             
@@ -101,10 +105,14 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       
       try {
         const data = await cachedFetch(
-          `yahoo_chart_v1_${selectedSymbol}`,
+          `yahoo_chart_v2_${selectedSymbol}`,
           async () => {
-            const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1mo`;
-            const res = await fetch(url);
+            const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(selectedSymbol)}?interval=1d&range=1mo`;
+            const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}&_=${Date.now()}`);
+            
+            if (res.status === 403) {
+              throw new Error("This symbol requires a premium data license.");
+            }
             if (!res.ok) throw new Error(`History Stream Offline (${res.status})`);
 
             const json = await res.json();
@@ -139,6 +147,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
 
     fetchHistory();
   }, [selectedSymbol, isModalOpen]);
+
+  const handleSymbolSelect = useCallback((symbol: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedSymbol(symbol);
+  }, []);
 
   if (tickerList.length === 0) {
     return (
@@ -202,11 +216,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                 <button
                   key={stock.symbol}
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setSelectedSymbol(stock.symbol);
-                  }}
+                  onClick={(e) => handleSymbolSelect(stock.symbol, e)}
                   className={cn(
                     "w-full text-left p-4 rounded-xl transition-all font-bold text-sm flex justify-between items-center group",
                     selectedSymbol === stock.symbol 
@@ -286,7 +296,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                     {histError || "Awaiting real-time insights..."}
                   </p>
                   <p className="text-xs text-muted-foreground mt-4 max-w-sm">
-                    Data provided by Yahoo Finance. Historical trends reflect the past 30 trading days.
+                    Data provided by Yahoo Finance Hub.
                   </p>
                 </div>
               )}
