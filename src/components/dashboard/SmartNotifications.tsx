@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -90,14 +89,15 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         try {
           for (const teamName of config.sportsTeams) {
             const sportInsight = await cachedFetch(
-              `insight_sports_event_next_${teamName.replace(/\s+/g, '_')}`,
+              `insight_sports_event_next_v2_${teamName.replace(/\s+/g, '_')}`,
               async () => {
                 const search = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
-                // Ensure strict name match or similar to avoid random team IDs
+                
+                // Strict matching to prevent "Exeter City" random results
                 const team = search?.teams?.find((t: any) => 
                   t.strTeam.toLowerCase() === teamName.toLowerCase() || 
                   t.strAlternate?.toLowerCase() === teamName.toLowerCase()
-                ) || search?.teams?.[0];
+                );
 
                 if (!team) return null;
                 
@@ -116,7 +116,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 icon: Trophy,
                 color: 'red'
               });
-              // Show only the first found match to keep the grid balanced
+              // Show only the first found match for followed teams
               break;
             }
           }

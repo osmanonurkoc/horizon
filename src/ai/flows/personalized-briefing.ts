@@ -135,7 +135,7 @@ const personalizedBriefingFlow = ai.defineFlow(
       return output?.briefing || "Dashboard synchronized. Modules are up to date and ready.";
     } catch (err) {
       console.error("Briefing Flow Error:", err);
-      return "Welcome back. Your dashboard is ready with the latest updates on your followed interests.";
+      return "Your personalized briefing is ready. Have a productive day ahead!";
     }
   }
 );

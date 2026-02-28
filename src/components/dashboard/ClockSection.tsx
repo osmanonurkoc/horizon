@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -51,11 +50,6 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
     setRandomGreeting(selected);
   }, [config, refreshKey]);
 
-  const hour = time.getHours();
-  let timeGreeting = "Good evening";
-  if (hour < 12) timeGreeting = "Good morning";
-  else if (hour < 18) timeGreeting = "Good afternoon";
-
   return (
     <div className="py-12 px-6 flex flex-col items-center text-center">
       <h1 className="text-8xl font-headline font-black tracking-tight mb-2 tabular-nums">
@@ -71,7 +65,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         </div>
         
         <h2 className="text-2xl font-headline font-bold mb-4 text-foreground/90">
-          {timeGreeting}! {randomGreeting}
+          {randomGreeting}
         </h2>
         
         {isLoading ? (
