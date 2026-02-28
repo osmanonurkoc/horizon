@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +19,6 @@ import {
   CommandItem as CommandPrimitiveItem
 } from "cmdk"
 
-// Local Command Implementation to ensure consistent styling with ShadCN
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive>
@@ -110,6 +109,8 @@ interface AutocompletePillInputProps {
   options: string[];
   values: string[];
   onChange: (values: string[]) => void;
+  onSearch?: (value: string) => void;
+  isLoading?: boolean;
   placeholder?: string;
   isMulti?: boolean;
 }
@@ -118,13 +119,14 @@ export function AutocompletePillInput({
   options,
   values,
   onChange,
+  onSearch,
+  isLoading = false,
   placeholder = "Select items...",
   isMulti = true,
 }: AutocompletePillInputProps) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
 
-  // Defensive de-duplication of options to prevent React key errors
   const uniqueOptions = React.useMemo(() => Array.from(new Set(options)), [options]);
 
   const handleSelect = (val: string) => {
@@ -163,32 +165,47 @@ export function AutocompletePillInput({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0 rounded-xl overflow-hidden shadow-xl border-none">
-          <Command>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0 rounded-xl overflow-hidden shadow-xl border-none" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <Command shouldFilter={!onSearch}>
             <CommandInput 
               placeholder={`Search ${placeholder.toLowerCase()}...`} 
               value={inputValue}
-              onValueChange={setInputValue}
+              onValueChange={(val) => {
+                setInputValue(val);
+                onSearch?.(val);
+              }}
             />
             <CommandList>
-              <CommandEmpty>No results found.</CommandEmpty>
-              <CommandGroup>
-                {uniqueOptions.map((option) => (
-                  <CommandItem
-                    key={option}
-                    value={option}
-                    onSelect={() => handleSelect(option)}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        values.includes(option) ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {option}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+              {isLoading ? (
+                <div className="py-6 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  <CommandEmpty>No results found.</CommandEmpty>
+                  <CommandGroup>
+                    {uniqueOptions.map((option) => (
+                      <CommandItem
+                        key={option}
+                        value={option}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onSelect={() => handleSelect(option)}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            values.includes(option) ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {option}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </>
+              )}
             </CommandList>
           </Command>
         </PopoverContent>

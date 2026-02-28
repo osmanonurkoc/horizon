@@ -32,14 +32,12 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     if (offset === 0 || isRetry) setError(null);
 
     try {
-      const keywords = config.newsTopics.length > 0 ? config.newsTopics[0] : 'general';
-      const languages = config.newsLanguages.length > 0 ? config.newsLanguages[0] : 'en';
+      const keywords = config.newsTopics.length > 0 ? config.newsTopics.join(',') : 'general';
+      const languages = config.newsLanguages.length > 0 ? config.newsLanguages.join(',') : 'en';
       
       const result = await cachedFetch(
-        `news_v2_${keywords}_${languages}_${offset}`,
+        `news_v3_${keywords}_${languages}_${offset}`,
         async () => {
-          // Mediastack free tier often prefers HTTP or has HTTPS issues.
-          // Using a standard fetch with protocol flexibility.
           const url = `https://api.mediastack.com/v1/news?access_key=${config.apiKeys.news}&keywords=${encodeURIComponent(keywords)}&languages=${languages}&limit=12&offset=${offset}`;
           
           const res = await fetch(url);
@@ -111,9 +109,16 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="space-y-12">
-      <div className="masonry-grid">
+      {/* Requirement 1: True Masonry Layout Fix */}
+      <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
         {articles.map((article, idx) => (
-          <a key={`${article.url}-${idx}`} href={article.url} target="_blank" rel="noopener noreferrer" className="block group">
+          <a 
+            key={`${article.url}-${idx}`} 
+            href={article.url} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="block group break-inside-avoid mb-6"
+          >
             <Card className="rounded-3xl-card overflow-hidden bg-card border-none shadow-sm hover:shadow-xl transition-all duration-500">
               {article.image && (
                 <div className="relative h-48 w-full overflow-hidden bg-muted/20">
@@ -156,8 +161,8 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
           </a>
         ))}
         
-        {loading && Array.from({ length: 4 }).map((_, i) => (
-          <div key={`skeleton-${i}`} className="h-80 rounded-3xl-card animate-skeleton bg-muted/40" />
+        {loading && Array.from({ length: 3 }).map((_, i) => (
+          <div key={`skeleton-${i}`} className="h-80 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-6" />
         ))}
       </div>
       
