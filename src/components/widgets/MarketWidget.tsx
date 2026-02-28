@@ -43,10 +43,13 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                   return null;
                 }
 
+                const price = parseFloat(quote["05. price"]);
+                const change = parseFloat(quote["09. change"]);
+
                 return {
                   symbol: quote["01. symbol"],
-                  price: parseFloat(quote["05. price"]) || 0,
-                  change: parseFloat(quote["09. change"]) || 0,
+                  price: isNaN(price) ? 0 : price,
+                  change: isNaN(change) ? 0 : change,
                   changePercent: quote["10. change percent"] || "0%",
                 };
               },
@@ -92,19 +95,19 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             {error && stocks.length === 0 ? (
               <div className="text-center py-4 text-muted-foreground italic">{error}</div>
             ) : (
-              stocks.map((stock) => (
-                <div key={stock.symbol} className="flex items-center justify-between group/item">
+              stocks.map((stock, idx) => (
+                <div key={`${stock.symbol}-${idx}`} className="flex items-center justify-between group/item">
                   <div>
                     <p className="font-black text-xl font-headline group-hover/item:text-primary transition-colors">{stock.symbol}</p>
-                    <p className="text-sm font-bold">${stock.price?.toLocaleString() ?? "0.00"}</p>
+                    <p className="text-sm font-bold">${(stock.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
-                  <div className={`flex flex-col items-end ${stock.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`flex flex-col items-end ${(stock.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     <div className="flex items-center gap-1 font-bold">
-                      {stock.change >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                      {(stock.change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                       {stock.changePercent}
                     </div>
                     <p className="text-xs font-medium opacity-70">
-                      {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}
+                      {(stock.change || 0) >= 0 ? '+' : ''}{(stock.change || 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -113,7 +116,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           </CardContent>
         </Card>
       </DialogTrigger>
-      <DialogContent className="rounded-3xl border-none max-w-2xl">
+      <DialogContent className="rounded-3xl border-none max-w-2xl bg-card">
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline font-bold">Portfolio Analysis</DialogTitle>
         </DialogHeader>
@@ -140,8 +143,8 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
           </div>
           <div className="space-y-2">
             <h4 className="font-bold flex items-center gap-2 text-sm uppercase tracking-widest text-muted-foreground">Market Pulse</h4>
-            {stocks.map((s) => (
-              <div key={`${s.symbol}-pulse`} className="flex justify-between p-3 border-b border-muted last:border-0">
+            {stocks.map((s, idx) => (
+              <div key={`${s.symbol}-pulse-${idx}`} className="flex justify-between p-3 border-b border-muted last:border-0">
                 <span className="font-bold">{s.symbol}</span>
                 <span className="font-mono text-xs opacity-60">P/E: 24.5 | Market Cap: $2.1T</span>
               </div>
