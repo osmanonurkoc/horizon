@@ -15,10 +15,17 @@ interface StockData {
   changePercent: string;
 }
 
+const MOCK_STOCKS: StockData[] = [
+  { symbol: "AAPL", price: 189.43, change: 1.25, changePercent: "0.66%" },
+  { symbol: "GOOGL", price: 142.56, change: -0.89, changePercent: "-0.62%" },
+  { symbol: "MSFT", price: 402.12, change: 2.45, changePercent: "0.61%" },
+];
+
 export function MarketWidget({ config }: { config: DiscoverConfig }) {
   const [stocks, setStocks] = useState<StockData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
     if (!config.apiKeys.market || config.stocks.length === 0) {
@@ -29,20 +36,21 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     const fetchStocks = async () => {
       setLoading(true);
       setError(null);
+      setIsDemo(false);
+      
       try {
         const results = await Promise.all(
           config.stocks.map(async (symbol) => {
-            // Clean symbol from format "AAPL (Apple Inc)" -> "AAPL"
             const ticker = symbol.split(' ')[0].toUpperCase();
             return cachedFetch(
-              `stock_v3_${ticker}_${config.apiKeys.market.slice(-4)}`,
+              `stock_v4_${ticker}_${config.apiKeys.market.slice(-4)}`,
               async () => {
                 const res = await fetch(
                   `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${config.apiKeys.market}`
                 );
                 const json = await res.json();
                 
-                if (json.Note || json.Information) {
+                if (json.Note || json.Information || json["Information"]) {
                   throw new Error("API Limit Reached");
                 }
 
@@ -67,12 +75,20 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         );
         
         const validStocks = results.filter((s): s is StockData => s !== null);
-        setStocks(validStocks);
+        
         if (validStocks.length === 0 && config.stocks.length > 0) {
           setError("No market data found");
+        } else {
+          setStocks(validStocks);
         }
       } catch (err: any) {
-        setError(err.message === "API Limit Reached" ? "Daily Limit Reached" : "Market Data Unavailable");
+        if (err.message === "API Limit Reached") {
+          setError("Daily Limit Reached (Demo Mode)");
+          setStocks(MOCK_STOCKS);
+          setIsDemo(true);
+        } else {
+          setError("Market Data Unavailable");
+        }
       } finally {
         setLoading(false);
       }
@@ -100,11 +116,14 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       <DialogTrigger asChild>
         <Card className="rounded-3xl-card bg-card overflow-hidden cursor-pointer group hover:border-primary/50 transition-all">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Market Watch</CardTitle>
+            <div className="flex flex-col">
+              <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Market Watch</CardTitle>
+              {isDemo && <span className="text-[10px] text-amber-500 font-bold uppercase animate-pulse">Demo Mode</span>}
+            </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            {error ? (
+            {error && !isDemo ? (
               <div className="text-center py-6 flex flex-col items-center gap-2">
                 <AlertCircle className="w-8 h-8 text-destructive opacity-40" />
                 <p className="text-sm font-bold text-muted-foreground italic">{error}</p>
@@ -118,16 +137,16 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                   <div>
                     <p className="font-black text-xl font-headline group-hover/item:text-primary transition-colors">{stock.symbol}</p>
                     <p className="text-sm font-bold">
-                      ${(stock.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${(stock.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
-                  <div className={`flex flex-col items-end ${(stock.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`flex flex-col items-end ${(stock.change ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     <div className="flex items-center gap-1 font-bold">
-                      {(stock.change || 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                      {(stock.change ?? 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                       {stock.changePercent || '0%'}
                     </div>
                     <p className="text-xs font-medium opacity-70">
-                      {(stock.change || 0) >= 0 ? '+' : ''}{(stock.change || 0).toFixed(2)}
+                      {(stock.change ?? 0) >= 0 ? '+' : ''}{(stock.change ?? 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -140,7 +159,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline font-bold">Portfolio Analysis</DialogTitle>
           <DialogDescription>
-            Detailed market performance and sector analysis for your selected symbols.
+            Detailed market performance and sector analysis for your selected symbols. {isDemo && "Currently showing demonstration data due to API limits."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-6">
@@ -169,7 +188,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             {stocks.map((s, idx) => (
               <div key={`${s.symbol}-det-${idx}`} className="flex justify-between items-center p-4 bg-muted/10 rounded-xl">
                 <span className="font-black text-lg">{s.symbol}</span>
-                <span className="font-mono text-xs opacity-70">Price: ${s.price.toFixed(2)} | Δ: {s.changePercent}</span>
+                <span className="font-mono text-xs opacity-70">Price: ${(s.price ?? 0).toFixed(2)} | Δ: {s.changePercent}</span>
               </div>
             ))}
           </div>

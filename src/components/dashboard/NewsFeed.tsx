@@ -37,16 +37,19 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
       const lang = config.newsLanguages[0] || 'en';
       
-      // Use cachedFetch but wrap the Server Action inside it
       const result = await cachedFetch(
-        `gnews_v4_${encodeURIComponent(q)}_${lang}_${config.apiKeys.news.slice(-4)}`,
+        `gnews_v5_${encodeURIComponent(q)}_${lang}_${config.apiKeys.news.slice(-4)}`,
         async () => {
           return await fetchGNewsAction(q, lang, config.apiKeys.news);
         },
         EXPIRY_TIMES.NEWS
       );
       
-      if (result) setArticles(result);
+      if (result && Array.isArray(result)) {
+        setArticles(result);
+      } else {
+        setArticles([]);
+      }
     } catch (err: any) {
       setError(err.message || "Deep Dive interrupted by a network glitch.");
     } finally {
@@ -85,7 +88,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="space-y-12">
-      <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
+      <div className="columns-1 md:columns-2 lg:columns-3 gap-6">
         {articles.map((article, idx) => (
           <a 
             key={`${article.url}-${idx}`} 
@@ -131,10 +134,16 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
           </a>
         ))}
         
-        {loading && Array.from({ length: 3 }).map((_, i) => (
-          <div key={`skeleton-${i}`} className="h-80 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-6" />
+        {loading && Array.from({ length: 6 }).map((_, i) => (
+          <div key={`skeleton-${i}`} className="h-64 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-6" />
         ))}
       </div>
+      
+      {!loading && articles.length === 0 && (
+        <div className="py-20 text-center text-muted-foreground italic">
+          No articles found for your selected topics. Try adding more general topics in settings.
+        </div>
+      )}
     </div>
   );
 }
