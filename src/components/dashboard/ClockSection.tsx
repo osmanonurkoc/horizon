@@ -76,7 +76,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
           </div>
         ) : (
           <p className="text-lg text-foreground/80 leading-relaxed font-body">
-            {briefing || "Your personalized briefing is ready. Have a productive day ahead!"}
+            {briefing || "Dashboard synchronized. Modules are up to date and ready."}
           </p>
         )}
       </div>

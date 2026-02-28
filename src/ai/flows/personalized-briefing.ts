@@ -64,7 +64,7 @@ Strictly summarize the data context in 2-3 concise sentences. Focus only on acti
 - Market moves (portfolio trends).
 - Upcoming matches for the user's specific followed teams.
 
-Do not use flowery language or greetings like "I hope you have a great day." Be direct and functional.
+Do not use flowery language or greetings. Be direct and functional.
 
 Data Context:
 {{#if enabledWidgets.weather}}
@@ -135,7 +135,7 @@ const personalizedBriefingFlow = ai.defineFlow(
       return output?.briefing || "Dashboard synchronized. Modules are up to date and ready.";
     } catch (err) {
       console.error("Briefing Flow Error:", err);
-      return "Your personalized briefing is ready. Have a productive day ahead!";
+      return "Dashboard synchronized. Modules are up to date and ready.";
     }
   }
 );
@@ -167,6 +167,5 @@ async function getMarketSummary(stocks: string[] | undefined): Promise<string | 
 async function getSportsSummary(teams: string[] | undefined): Promise<string | undefined> {
   if (!teams || teams.length === 0) return undefined;
   const team = teams[0];
-  // Functional summary of their specific team
   return `The ${team} have their next scheduled fixture appearing tonight. Local coverage and stats are synchronized.`;
 }

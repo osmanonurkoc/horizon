@@ -87,40 +87,45 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       // 2. Sports Insight (STRICTLY for Followed Teams Only)
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0) {
         try {
+          const allUpcomingMatches: any[] = [];
+          
           for (const teamName of config.sportsTeams) {
-            const sportInsight = await cachedFetch(
-              `insight_sports_event_next_v2_${teamName.replace(/\s+/g, '_')}`,
-              async () => {
-                const search = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
-                
-                // Strict matching to prevent "Exeter City" random results
-                const team = search?.teams?.find((t: any) => 
-                  t.strTeam.toLowerCase() === teamName.toLowerCase() || 
-                  t.strAlternate?.toLowerCase() === teamName.toLowerCase()
-                );
-
-                if (!team) return null;
-                
-                const teamId = team.idTeam;
-                const next = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${teamId}`);
-                return next?.events?.[0] || null;
-              },
-              EXPIRY_TIMES.WEATHER
+            // Step 1: Get Team ID
+            const search = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
+            const team = search?.teams?.find((t: any) => 
+              t.strTeam.toLowerCase() === teamName.toLowerCase() || 
+              t.strAlternate?.toLowerCase() === teamName.toLowerCase()
             );
 
-            if (sportInsight) {
-              newInsights.push({
-                type: 'sports',
-                title: 'Next Match',
-                message: `${sportInsight.strEvent} on ${sportInsight.dateEvent} at ${sportInsight.strTime || 'TBD'}.`,
-                icon: Trophy,
-                color: 'red'
-              });
-              // Show only the first found match for followed teams
-              break;
+            if (team) {
+              // Step 2: Get Next Events for this ID
+              const next = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${team.idTeam}`);
+              if (next?.events) {
+                allUpcomingMatches.push(...next.events);
+              }
             }
           }
-        } catch (e) {}
+
+          if (allUpcomingMatches.length > 0) {
+            // Step 3: Sort by absolute closest date/time
+            allUpcomingMatches.sort((a, b) => {
+              const dateA = new Date(`${a.dateEvent}T${a.strTime || '00:00:00'}`);
+              const dateB = new Date(`${b.dateEvent}T${b.strTime || '00:00:00'}`);
+              return dateA.getTime() - dateB.getTime();
+            });
+
+            const match = allUpcomingMatches[0];
+            newInsights.push({
+              type: 'sports',
+              title: 'Next Match',
+              message: `${match.strEvent} on ${match.dateEvent} at ${match.strTime || 'TBD'} (${match.strLeague})`,
+              icon: Trophy,
+              color: 'red'
+            });
+          }
+        } catch (e) {
+          console.warn("Sports insight error:", e);
+        }
       }
 
       // 3. Market Insight (Top Mover)
