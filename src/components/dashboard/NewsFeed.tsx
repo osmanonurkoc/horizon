@@ -42,7 +42,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v11_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          `gnews_v12_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
           async () => {
             return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
           },
