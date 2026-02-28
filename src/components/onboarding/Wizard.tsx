@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Pill } from "@/components/ui/pill";
 import { 
   HelpCircle, ArrowRight, ArrowLeft, Check, Plus, 
-  Download, Upload, ChevronUp, ChevronDown, Monitor, Info
+  Download, Upload, ChevronUp, ChevronDown, Monitor
 } from "lucide-react";
 import { 
   type DiscoverConfig, saveConfig, DEFAULT_CONFIG, getConfig, SEARCH_ENGINES 
@@ -18,13 +18,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AutocompletePillInput } from "@/components/ui/autocomplete-pill-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Requirement 3: Exact Mediastack Lists
-const MEDIASTACK_TOPICS = ["general", "business", "entertainment", "health", "science", "sports", "technology"];
-const MEDIASTACK_LANGUAGES = ["ar", "de", "en", "es", "fr", "he", "it", "nl", "no", "pt", "ru", "se", "tr", "zh"];
-
-const MOCK_SPORTS = [
-  "Real Madrid", "Manchester City", "Bayern Munich", "Arsenal", "PSG", "Barcelona", "Inter Milan", "Liverpool"
-];
+const GNEWS_LANGUAGES = ["ar", "de", "en", "es", "fr", "he", "it", "nl", "no", "pt", "ru", "se", "tr", "zh"];
+const GNEWS_TOPICS = ["general", "world", "nation", "business", "technology", "entertainment", "sports", "science", "health"];
 
 interface WizardProps {
   onComplete: (config: DiscoverConfig) => void;
@@ -36,16 +31,15 @@ export default function Wizard({ onComplete }: WizardProps) {
   const [tempBookmark, setTempBookmark] = useState({ name: '', url: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Dynamic Search State
   const [locationResults, setLocationResults] = useState<string[]>([]);
   const [stockResults, setStockResults] = useState<string[]>([]);
+  const [sportsResults, setSportsResults] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const stored = getConfig();
-    if (stored) {
-      setConfig(stored);
-    }
+    if (stored) setConfig(stored);
   }, []);
 
   const nextStep = () => setStep(s => s + 1);
@@ -68,46 +62,67 @@ export default function Wizard({ onComplete }: WizardProps) {
     setConfig(prev => ({ ...prev, widgetOrder: newOrder }));
   };
 
-  // Requirement 3: Dynamic Fetching (Debounced)
-  const fetchLocations = useCallback(async (q: string) => {
+  const fetchLocations = useCallback((q: string) => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!q || q.length < 2) return;
-    if (!config.apiKeys.weather) {
-      setLocationResults(["Please add your API key first"]);
-      return;
-    }
-    setIsSearching(true);
-    try {
-      const res = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`);
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setLocationResults(data.map((l: any) => `${l.name}, ${l.country}`));
+    
+    searchTimeout.current = setTimeout(async () => {
+      if (!config.apiKeys.weather) return;
+      setIsSearching(true);
+      try {
+        const res = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setLocationResults(data.map((l: any) => `${l.name}, ${l.country}`));
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearching(false);
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSearching(false);
-    }
+    }, 300);
   }, [config.apiKeys.weather]);
 
-  const fetchStocks = useCallback(async (q: string) => {
+  const fetchStocks = useCallback((q: string) => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!q || q.length < 1) return;
-    if (!config.apiKeys.market) {
-      setStockResults(["Please add your API key first"]);
-      return;
-    }
-    setIsSearching(true);
-    try {
-      const res = await fetch(`https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(q)}&apikey=${config.apiKeys.market}`);
-      const data = await res.json();
-      if (data.bestMatches) {
-        setStockResults(data.bestMatches.map((m: any) => `${m["1. symbol"]} (${m["2. name"]})`));
+
+    searchTimeout.current = setTimeout(async () => {
+      if (!config.apiKeys.market) return;
+      setIsSearching(true);
+      try {
+        const res = await fetch(`https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(q)}&apikey=${config.apiKeys.market}`);
+        const data = await res.json();
+        if (data.bestMatches) {
+          setStockResults(data.bestMatches.map((m: any) => `${m["1. symbol"]} (${m["2. name"]})`));
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearching(false);
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSearching(false);
-    }
+    }, 300);
   }, [config.apiKeys.market]);
+
+  const fetchSports = useCallback((q: string) => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!q || q.length < 2) return;
+
+    searchTimeout.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (data.teams) {
+          setSportsResults(data.teams.map((t: any) => t.strTeam));
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  }, []);
 
   const finish = () => {
     saveConfig(config);
@@ -202,8 +217,8 @@ export default function Wizard({ onComplete }: WizardProps) {
                 <Label className="text-base font-semibold">API Credentials</Label>
                 {[
                   { id: 'weather', label: 'OpenWeather', link: 'https://home.openweathermap.org/users/sign_up', help: 'Get a free key at openweathermap.org', tip: 'Powers local weather updates' },
-                  { id: 'news', label: 'Mediastack', link: 'https://mediastack.com/signup/free', help: 'Get a free key at mediastack.com', tip: 'Feeds the "Deep Dive" global news stream' },
-                  { id: 'market', label: 'Alpha Vantage', link: 'https://www.alphavantage.co/support/#api-key', help: 'Get a free key at alphavantage.co', tip: 'Provides real-time stock and market data' }
+                  { id: 'news', label: 'GNews API', link: 'https://gnews.io/register', help: 'Get a free key at gnews.io', tip: 'Feeds the masonry-style news stream' },
+                  { id: 'market', label: 'Alpha Vantage', link: 'https://www.alphavantage.co/support/#api-key', help: 'Get a free key at alphavantage.co', tip: 'Provides stock and market watch data' }
                 ].map((api) => (
                   <div key={api.id} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -296,14 +311,14 @@ export default function Wizard({ onComplete }: WizardProps) {
               
               {config.enabledWidgets.weather && (
                 <div className="space-y-4">
-                  <Label className="text-base font-semibold">Base Location (Dynamic)</Label>
+                  <Label className="text-base font-semibold">Base Location (Real-time)</Label>
                   <AutocompletePillInput 
                     options={locationResults}
                     values={config.location ? [config.location] : []}
                     onSearch={fetchLocations}
                     isLoading={isSearching}
                     onChange={(vals) => setConfig(c => ({ ...c, location: vals[0] || "" }))}
-                    placeholder="Search for a city..."
+                    placeholder={config.apiKeys.weather ? "Search cities..." : "Add Weather API Key first"}
                     isMulti={false}
                   />
                 </div>
@@ -312,21 +327,22 @@ export default function Wizard({ onComplete }: WizardProps) {
               {config.enabledWidgets.newsFeed && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Interest Topics (Mediastack)</Label>
+                    <Label className="text-base font-semibold">Interest Topics (GNews)</Label>
                     <AutocompletePillInput 
-                      options={MEDIASTACK_TOPICS}
+                      options={GNEWS_TOPICS}
                       values={config.newsTopics}
                       onChange={(vals) => setConfig(c => ({ ...c, newsTopics: vals }))}
-                      placeholder="Add topic..."
+                      placeholder="Select topics..."
                     />
                   </div>
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Feed Languages</Label>
+                    <Label className="text-base font-semibold">Feed Language</Label>
                     <AutocompletePillInput 
-                      options={MEDIASTACK_LANGUAGES}
+                      options={GNEWS_LANGUAGES}
                       values={config.newsLanguages}
                       onChange={(vals) => setConfig(c => ({ ...c, newsLanguages: vals }))}
-                      placeholder="Add language..."
+                      placeholder="Select language..."
+                      isMulti={false}
                     />
                   </div>
                 </div>
@@ -335,25 +351,27 @@ export default function Wizard({ onComplete }: WizardProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {config.enabledWidgets.market && (
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Market Tickers (Dynamic Search)</Label>
+                    <Label className="text-base font-semibold">Market Tickers (Global)</Label>
                     <AutocompletePillInput 
                       options={stockResults}
                       values={config.stocks}
                       onSearch={fetchStocks}
                       isLoading={isSearching}
                       onChange={(vals) => setConfig(c => ({ ...c, stocks: vals }))}
-                      placeholder="Search symbols..."
+                      placeholder={config.apiKeys.market ? "Search stocks..." : "Add Market API Key first"}
                     />
                   </div>
                 )}
                 {config.enabledWidgets.sports && (
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Stadium Teams</Label>
+                    <Label className="text-base font-semibold">Sports Teams (TheSportsDB)</Label>
                     <AutocompletePillInput 
-                      options={MOCK_SPORTS}
+                      options={sportsResults}
                       values={config.sportsTeams}
+                      onSearch={fetchSports}
+                      isLoading={isSearching}
                       onChange={(vals) => setConfig(c => ({ ...c, sportsTeams: vals }))}
-                      placeholder="Add team..."
+                      placeholder="Search teams..."
                     />
                   </div>
                 )}
