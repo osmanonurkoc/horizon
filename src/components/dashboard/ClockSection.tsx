@@ -13,7 +13,7 @@ const EASTER_EGGS = [
   "Another perfect day for open-source contributions.",
   "Ready to design some fresh UI themes?",
   "Boot up the pen display, it's time to draw.",
-  "Welcome back. Your horizon is clear.",
+  "Welcome back. Your dashboard is ready.",
   "The world is waiting for your next big project.",
   "Stay focused, stay inspired, and stay slim.",
   "Let's make some architectural magic happen."
