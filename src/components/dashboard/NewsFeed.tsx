@@ -32,13 +32,13 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     setError(null);
 
     try {
-      const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'top stories';
+      const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : '';
       const lang = config.newsLanguages[0] || 'en';
-      const endpoint = config.newsTopics.length > 0 ? 'search' : 'top-headlines';
+      const endpoint = q ? 'search' : 'top-headlines';
       
       // GNews API usage
       const result = await cachedFetch(
-        `gnews_v1_${encodeURIComponent(q)}_${lang}_${config.apiKeys.news.slice(-4)}`,
+        `gnews_v2_${encodeURIComponent(q || 'top')}_${lang}_${config.apiKeys.news.slice(-4)}`,
         async () => {
           const baseUrl = `https://gnews.io/api/v4/${endpoint}`;
           const queryParam = endpoint === 'search' ? `q=${encodeURIComponent(q)}` : 'category=general';
@@ -48,10 +48,12 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
           const json = await res.json();
 
           if (!res.ok) {
-            throw new Error(json.errors ? json.errors[0] : "GNews quota limit or invalid key.");
+            // GNews returns detailed error messages in the "errors" field
+            const msg = json.errors ? json.errors[0] : "Invalid API Key or Quota Limit reached.";
+            throw new Error(msg);
           }
           
-          if (!json.articles) throw new Error("Invalid API Response");
+          if (!json.articles) throw new Error("Invalid response format from GNews.");
           return json.articles as Article[];
         },
         EXPIRY_TIMES.NEWS
@@ -59,6 +61,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       
       if (result) setArticles(result);
     } catch (err: any) {
+      // We don't console.error as per guidelines, let the UI handle it
       setError(err.message || "Deep Dive interrupted by a network glitch.");
     } finally {
       setLoading(false);
