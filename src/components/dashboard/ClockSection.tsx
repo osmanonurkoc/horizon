@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,7 +7,7 @@ import { type DiscoverConfig, convertConfigToBriefingInput } from "@/lib/config-
 import { generatePersonalizedBriefing } from "@/ai/flows/personalized-briefing";
 import { Sparkles } from "lucide-react";
 
-export function ClockSection({ config }: { config: DiscoverConfig }) {
+export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfig, refreshKey?: number }) {
   const [time, setTime] = useState(new Date());
   const [briefing, setBriefing] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -18,6 +19,7 @@ export function ClockSection({ config }: { config: DiscoverConfig }) {
 
   useEffect(() => {
     const fetchBriefing = async () => {
+      setIsLoading(true);
       try {
         const input = convertConfigToBriefingInput(config);
         const result = await generatePersonalizedBriefing(input);
@@ -29,7 +31,7 @@ export function ClockSection({ config }: { config: DiscoverConfig }) {
       }
     };
     fetchBriefing();
-  }, [config]);
+  }, [config, refreshKey]);
 
   const hour = time.getHours();
   let greeting = "Good evening";
