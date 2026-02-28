@@ -43,7 +43,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       // Parallel requests for multi-language support as GNews only supports one lang per request
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v6_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          `gnews_v7_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
           async () => {
             return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
           },
@@ -75,7 +75,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     } finally {
       setLoading(false);
     }
-  }, [config]);
+  }, [config.apiKeys.news, config.newsTopics, config.newsLanguages]);
 
   // Initial fetch
   useEffect(() => {
@@ -134,15 +134,15 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="space-y-12">
-      {/* Masonry Grid Implementation */}
-      <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-0">
+      {/* Masonry Grid Implementation with improved spacing */}
+      <div className="columns-1 md:columns-2 lg:columns-3 gap-8 space-y-0">
         {articles.map((article, idx) => (
           <a 
             key={`${article.url}-${idx}`} 
             href={article.url} 
             target="_blank" 
             rel="noopener noreferrer" 
-            className="block group break-inside-avoid mb-6"
+            className="block group break-inside-avoid mb-8"
           >
             <Card className="rounded-3xl-card overflow-hidden bg-card border-none shadow-sm hover:shadow-xl transition-all duration-500">
               {article.image && (
@@ -182,7 +182,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         ))}
         
         {loading && Array.from({ length: 3 }).map((_, i) => (
-          <div key={`skeleton-${i}`} className="h-64 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-6" />
+          <div key={`skeleton-${i}`} className="h-64 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-8" />
         ))}
       </div>
       
