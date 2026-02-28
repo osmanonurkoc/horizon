@@ -34,6 +34,6 @@ export async function cachedFetch<T>(
 
 export const EXPIRY_TIMES = {
   WEATHER: 30 * 60 * 1000, // 30 mins
-  MARKET: 30 * 60 * 1000, // 30 mins
-  NEWS: 2 * 60 * 60 * 1000, // 2 hours
+  MARKET: 60 * 60 * 1000, // 60 mins (Increased to respect limits)
+  NEWS: 60 * 60 * 1000, // 1 hour
 };

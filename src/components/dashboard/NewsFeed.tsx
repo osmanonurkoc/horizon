@@ -1,12 +1,11 @@
-
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import Image from "next/image";
-import { AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
+import { AlertCircle, RefreshCw, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchGNewsAction } from "@/app/actions/news";
 
@@ -24,10 +23,14 @@ interface Article {
 
 export function NewsFeed({ config }: { config: DiscoverConfig }) {
   const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  
+  const observerTarget = useRef(null);
 
-  const fetchNews = useCallback(async () => {
+  const fetchNews = useCallback(async (pageNum: number, isInitial: boolean = false) => {
     if (!config.apiKeys.news) return;
     
     setLoading(true);
@@ -35,20 +38,36 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
 
     try {
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
-      const lang = config.newsLanguages[0] || 'en';
+      const languages = config.newsLanguages.length > 0 ? config.newsLanguages : ['en'];
       
-      const result = await cachedFetch(
-        `gnews_v5_${encodeURIComponent(q)}_${lang}_${config.apiKeys.news.slice(-4)}`,
-        async () => {
-          return await fetchGNewsAction(q, lang, config.apiKeys.news);
-        },
-        EXPIRY_TIMES.NEWS
+      // Parallel requests for each language
+      const languageRequests = languages.map(lang => 
+        cachedFetch(
+          `gnews_v6_${encodeURIComponent(q)}_${lang}_p${pageNum}_${config.apiKeys.news.slice(-4)}`,
+          async () => {
+            return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
+          },
+          EXPIRY_TIMES.NEWS
+        )
       );
-      
-      if (result && Array.isArray(result)) {
-        setArticles(result);
+
+      const results = await Promise.all(languageRequests);
+      const combinedArticles: Article[] = results.flat();
+
+      if (combinedArticles.length === 0) {
+        setHasMore(false);
       } else {
-        setArticles([]);
+        setArticles(prev => {
+          const newArticles = isInitial ? combinedArticles : [...prev, ...combinedArticles];
+          
+          // Deduplicate by URL
+          const uniqueArticles = Array.from(new Map(newArticles.map(a => [a.url, a])).values());
+          
+          // Sort by published date
+          return uniqueArticles.sort((a, b) => 
+            new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+          );
+        });
       }
     } catch (err: any) {
       setError(err.message || "Deep Dive interrupted by a network glitch.");
@@ -58,8 +77,33 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
   }, [config]);
 
   useEffect(() => {
-    fetchNews();
+    setPage(1);
+    setArticles([]);
+    setHasMore(true);
+    fetchNews(1, true);
   }, [fetchNews]);
+
+  // Intersection Observer for Infinite Scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          setPage(prev => {
+            const nextPage = prev + 1;
+            fetchNews(nextPage);
+            return nextPage;
+          });
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, loading, fetchNews]);
 
   if (!config.apiKeys.news) {
     return (
@@ -77,7 +121,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         <p className="text-muted-foreground mb-6 max-w-md mx-auto">{error}</p>
         <Button 
           variant="outline" 
-          onClick={fetchNews}
+          onClick={() => fetchNews(1, true)}
           className="rounded-full gap-2 border-destructive/20 hover:bg-destructive/10"
         >
           <RefreshCw className="w-4 h-4" /> Try Again
@@ -134,14 +178,27 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
           </a>
         ))}
         
-        {loading && Array.from({ length: 6 }).map((_, i) => (
+        {loading && Array.from({ length: 3 }).map((_, i) => (
           <div key={`skeleton-${i}`} className="h-64 rounded-3xl-card animate-skeleton bg-muted/40 break-inside-avoid mb-6" />
         ))}
       </div>
       
+      {/* Scroll Trigger */}
+      <div ref={observerTarget} className="h-20 flex items-center justify-center">
+        {loading && articles.length > 0 && (
+          <div className="flex flex-col items-center gap-2 text-primary">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <span className="text-xs font-bold uppercase tracking-widest">Loading more global insight...</span>
+          </div>
+        )}
+        {!hasMore && articles.length > 0 && (
+          <p className="text-muted-foreground italic text-sm">You have reached the end of the current horizon.</p>
+        )}
+      </div>
+
       {!loading && articles.length === 0 && (
         <div className="py-20 text-center text-muted-foreground italic">
-          No articles found for your selected topics. Try adding more general topics in settings.
+          No articles found for your selected topics and languages.
         </div>
       )}
     </div>

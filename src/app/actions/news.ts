@@ -1,14 +1,13 @@
-
 'use server';
 
 /**
  * Server Action to fetch news from GNews API.
  * This bypasses CORS issues encountered when fetching from the client.
  */
-export async function fetchGNewsAction(q: string, lang: string, apiKey: string) {
+export async function fetchGNewsAction(q: string, lang: string, page: number, apiKey: string) {
   const query = q && q.trim() !== "" ? q : 'general';
   const language = lang || 'en';
-  const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=${language}&max=12&apikey=${apiKey}`;
+  const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=${language}&page=${page}&max=12&apikey=${apiKey}`;
   
   try {
     const res = await fetch(url, { 
