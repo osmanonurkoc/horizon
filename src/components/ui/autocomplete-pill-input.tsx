@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -131,6 +132,7 @@ export function AutocompletePillInput({
                       activeIndex === index ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
                       values.includes(option) && "text-primary font-bold"
                     )}
+                    /* Mouse selection fix: onMouseDown captures click before input blurs */
                     onMouseDown={(e) => {
                       e.preventDefault();
                       handleSelect(option);

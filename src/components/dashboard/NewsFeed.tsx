@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -7,6 +8,7 @@ import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import Image from "next/image";
 import { AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { fetchGNewsAction } from "@/app/actions/news";
 
 interface Article {
   title: string;
@@ -35,23 +37,11 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
       const lang = config.newsLanguages[0] || 'en';
       
-      // GNews API usage - strictly search endpoint with default q to avoid 400 errors
+      // Use cachedFetch but wrap the Server Action inside it
       const result = await cachedFetch(
-        `gnews_v3_${encodeURIComponent(q)}_${lang}_${config.apiKeys.news.slice(-4)}`,
+        `gnews_v4_${encodeURIComponent(q)}_${lang}_${config.apiKeys.news.slice(-4)}`,
         async () => {
-          const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&lang=${lang}&max=12&apikey=${config.apiKeys.news}`;
-          
-          const res = await fetch(url, { mode: 'cors' });
-          const json = await res.json();
-
-          if (!res.ok) {
-            // GNews returns detailed error messages in the "errors" field
-            const msg = json.errors ? json.errors[0] : "Invalid API Key or Quota Limit reached.";
-            throw new Error(msg);
-          }
-          
-          if (!json.articles) throw new Error("Invalid response format from GNews.");
-          return json.articles as Article[];
+          return await fetchGNewsAction(q, lang, config.apiKeys.news);
         },
         EXPIRY_TIMES.NEWS
       );
