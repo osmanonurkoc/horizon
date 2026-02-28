@@ -37,14 +37,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     [config.stocks]
   );
 
-  // Initial symbol selection
   useEffect(() => {
     if (tickerList.length > 0 && !selectedSymbol) {
       setSelectedSymbol(tickerList[0]);
     }
   }, [tickerList, selectedSymbol]);
 
-  // Fetch quotes for the card view using v8 chart endpoint (more resilient than v7 quote)
   useEffect(() => {
     const fetchStocks = async () => {
       if (tickerList.length === 0) {
@@ -61,10 +59,14 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             return cachedFetch(
               `yahoo_v8_quote_${symbol}`,
               async () => {
-                const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+                // Using v8 chart endpoint for both quote and chart as it's more stable via proxy
+                const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
                 const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
                 
-                if (!res.ok) throw new Error(`Access Denied (${res.status})`);
+                if (!res.ok) {
+                  if (res.status === 403) throw new Error("Access Denied (403)");
+                  throw new Error(`Market Offline (${res.status})`);
+                }
                 
                 const json = await res.json();
                 const meta = json.chart?.result?.[0]?.meta;
@@ -92,7 +94,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         setError(null);
       } catch (err: any) {
         console.error("Quotes fetch error:", err);
-        setError(err.message || "Unable to load market data.");
+        setError(err.message || "Market synchronization failed.");
       } finally {
         setLoading(false);
       }
@@ -101,7 +103,6 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     fetchStocks();
   }, [tickerList]);
 
-  // Fetch historical data for the chart view
   useEffect(() => {
     if (!selectedSymbol || !isModalOpen) return;
 
@@ -114,7 +115,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         const data = await cachedFetch(
           `yahoo_v8_hist_${selectedSymbol}`,
           async () => {
-            const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(selectedSymbol)}?interval=1d&range=1mo`;
+            const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(selectedSymbol)}?interval=1d&range=1mo`;
             const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
             
             if (!res.ok) throw new Error(`Chart Access Denied (${res.status})`);
@@ -123,7 +124,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             const result = json.chart?.result?.[0];
             
             if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) {
-              throw new Error("No historical records found.");
+              throw new Error("No trend signals found.");
             }
 
             const timestamps = result.timestamp;
@@ -143,7 +144,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         setHistoricalData(data);
       } catch (err: any) {
         console.error("History fetch error:", err);
-        setHistError(err.message || "Unable to sync trends.");
+        setHistError(err.message || "Unable to sync historical trends.");
       } finally {
         setHistLoading(false);
       }
@@ -164,7 +165,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         <CardContent className="flex flex-col items-center justify-center h-48 text-muted-foreground p-6 text-center">
           <BarChart3 className="w-12 h-12 mb-2 opacity-30" />
           <p className="font-medium">Market Setup Required</p>
-          <p className="text-xs">Add your favorite tickers in settings.</p>
+          <p className="text-xs">Add tickers in onboarding or settings.</p>
         </CardContent>
       </Card>
     );
@@ -204,7 +205,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
             )) : (
               <div className="py-10 text-center space-y-2">
                 <AlertCircle className="w-8 h-8 mx-auto text-destructive/50" />
-                <p className="text-sm font-bold text-muted-foreground">{error || "No real-time signals available."}</p>
+                <p className="text-sm font-bold text-muted-foreground">{error || "No active signals."}</p>
               </div>
             )}
           </CardContent>
@@ -212,11 +213,10 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       </DialogTrigger>
       <DialogContent className="rounded-3xl border-none max-w-4xl bg-card p-0 overflow-hidden shadow-2xl">
         <div className="flex h-[600px]">
-          {/* Sidebar List */}
           <div className="w-72 bg-muted/10 border-r p-6 space-y-4 overflow-y-auto">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Your Portfolio</h4>
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Portfolio</h4>
             <div className="space-y-2">
-              {stocks.length > 0 ? stocks.map(stock => (
+              {stocks.map(stock => (
                 <button
                   key={stock.symbol}
                   type="button"
@@ -234,24 +234,19 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                     selectedSymbol === stock.symbol ? "text-white/80" : "text-muted-foreground"
                   )}>${(stock.price || 0).toFixed(2)}</span>
                 </button>
-              )) : (
-                <p className="text-xs text-muted-foreground italic p-4">No portfolio data found.</p>
-              )}
+              ))}
             </div>
           </div>
 
-          {/* Chart Area */}
           <div className="flex-1 p-10 flex flex-col bg-card">
             <DialogHeader className="mb-10">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1">
                   <DialogTitle className="text-4xl font-headline font-black tracking-tight">
-                    {selectedSymbol || "Market Insights"}
+                    {selectedSymbol}
                   </DialogTitle>
                   <DialogDescription className="text-muted-foreground">
-                    {selectedSymbol 
-                      ? `30-Day performance history for ${selectedSymbol}.` 
-                      : "Detailed historical stock performance trends from Yahoo Finance."}
+                    30-Day performance history and performance metrics.
                   </DialogDescription>
                 </div>
                 {histLoading && <Loader2 className="w-6 h-6 animate-spin text-primary" />}
@@ -306,12 +301,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                     <>
                       <Loader2 className="w-12 h-12 text-primary/40 mb-4 animate-spin" />
                       <p className="text-lg font-bold text-foreground/80 leading-tight">
-                        Awaiting Market Signals...
+                        Awaiting Market Stream...
                       </p>
                     </>
                   )}
                   <p className="text-xs text-muted-foreground mt-4 max-w-sm">
-                    Global Market Stream provided via Yahoo Finance.
+                    Global Market Stream provided via Yahoo Finance Hub.
                   </p>
                 </div>
               )}
@@ -321,12 +316,12 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               <div className="p-5 bg-primary/5 rounded-2xl border border-primary/10 transition-colors hover:bg-primary/10">
                 <p className="text-[10px] font-black uppercase text-primary mb-1 tracking-widest">Connectivity</p>
                 <p className="font-bold flex items-center gap-2 text-foreground/90 text-sm">
-                  <Activity className="w-4 h-4" /> Global Finance Stream
+                  <Activity className="w-4 h-4" /> Real-time Market Data
                 </p>
               </div>
               <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 transition-colors hover:bg-secondary/10">
                 <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Provider</p>
-                <p className="font-bold text-foreground/90 text-sm">Yahoo Finance Hub</p>
+                <p className="font-bold text-foreground/90 text-sm">Yahoo Finance Proxy</p>
               </div>
             </div>
           </div>
