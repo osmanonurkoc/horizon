@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Card, CardContent } from "@/components/ui/card";
-import { CloudRain, Trophy, TrendingUp, Loader2, Sun, Timer } from "lucide-react";
+import { CloudRain, Trophy, TrendingUp, Loader2, Sun } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 
 interface Insight {
@@ -86,14 +86,12 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           let sportInsight: Insight | null = null;
           
           for (const teamName of config.sportsTeams) {
-            // A. Search Team ID
             const searchData = await robustProxyFetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
               headers: { "x-apisports-key": config.apiKeys.sports }
             });
             const teamId = searchData?.response?.[0]?.team?.id;
 
             if (teamId) {
-              // B. Check LIVE first
               const liveData = await robustProxyFetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&live=all`, {
                 headers: { "x-apisports-key": config.apiKeys.sports }
               });
@@ -108,10 +106,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                   color: 'red',
                   isLive: true
                 };
-                break; // Live takes priority
+                break;
               }
 
-              // C. Check NEXT if no live
               if (!sportInsight) {
                 const nextData = await robustProxyFetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&next=1`, {
                   headers: { "x-apisports-key": config.apiKeys.sports }

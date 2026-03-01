@@ -25,7 +25,7 @@ interface WizardProps {
   onComplete: (config: DiscoverConfig) => void;
 }
 
-async function robustProxyFetch(targetUrl: string) {
+async function robustProxyFetch(targetUrl: string, options: RequestInit = {}) {
   const encodedUrl = encodeURIComponent(targetUrl);
   const proxies = [
     `https://api.allorigins.win/raw?url=${encodedUrl}`,
@@ -34,7 +34,7 @@ async function robustProxyFetch(targetUrl: string) {
 
   for (const proxyUrl of proxies) {
     try {
-      const res = await fetch(proxyUrl);
+      const res = await fetch(proxyUrl, options);
       if (!res.ok) continue;
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) continue;
@@ -113,11 +113,9 @@ export default function Wizard({ onComplete }: WizardProps) {
       if (!config.apiKeys.sports) return;
       setIsSearching(true);
       try {
-        // API-Football team search
-        const res = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(q)}`, {
+        const data = await robustProxyFetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(q)}`, {
           headers: { "x-apisports-key": config.apiKeys.sports }
         });
-        const data = await res.json();
         if (data?.response) setSportsResults(data.response.map((r: any) => r.team.name));
       } finally { setIsSearching(false); }
     }, 300);
@@ -241,7 +239,7 @@ export default function Wizard({ onComplete }: WizardProps) {
                       type="password"
                       placeholder="Paste your key here..."
                       className="rounded-xl h-12"
-                      value={(config.apiKeys as any)[api.id]}
+                      value={(config.apiKeys as any)[api.id] || ""}
                       onChange={(e) => setConfig(c => ({
                         ...c,
                         apiKeys: { ...c.apiKeys, [api.id]: e.target.value }
