@@ -6,7 +6,6 @@ import { Trophy, ArrowRight, ShieldCheck, Loader2, AlertCircle, History, Timer }
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { fetchSportsAction } from "@/app/actions/sports";
 
 interface TeamResult {
   teamName: string;
@@ -17,9 +16,9 @@ interface TeamResult {
   date: string;
 }
 
-// Single Fetch Strategy with Caching and Server Action
-async function getFixturesCached(teamId: number, apiKey: string) {
-  const cacheKey = `sports_fixtures_v2_${teamId}`;
+// Client-side fetcher with 5-minute cache to bypass Server Action 404s
+async function getFixturesClient(teamId: number, apiKey: string) {
+  const cacheKey = `sports_fixtures_v3_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
@@ -35,11 +34,43 @@ async function getFixturesCached(teamId: number, apiKey: string) {
   const season = month < 7 ? year - 1 : year;
 
   try {
-    const response = await fetchSportsAction(`fixtures?team=${teamId}&season=${season}`, apiKey);
+    const url = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+    let res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        "x-apisports-key": apiKey,
+        "Accept": "application/json"
+      }
+    });
+
+    let data = await res.json();
+
+    // Self-healing fallback for free tier season restrictions
+    if (data.errors && Object.values(data.errors)[0]?.toString().includes("try from")) {
+      const errorStr = Object.values(data.errors)[0] as string;
+      const match = errorStr.match(/to (\d{4})/);
+      const fallbackSeason = match ? match[1] : '2024';
+      
+      const newUrl = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${fallbackSeason}`;
+      res = await fetch(newUrl, {
+        method: 'GET',
+        headers: {
+          "x-apisports-key": apiKey,
+          "Accept": "application/json"
+        }
+      });
+      data = await res.json();
+    }
+
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      throw new Error(Object.values(data.errors)[0] as string);
+    }
+
+    const response = data.response || [];
     localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
     return response;
-  } catch (e) {
-    console.warn(`Sports Widget Fetch Error for team ${teamId}:`, e);
+  } catch (e: any) {
+    console.warn(`Sports Fetch Error for team ${teamId}:`, e.message);
     return [];
   }
 }
@@ -60,7 +91,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     try {
       const teamResults = await Promise.all(
         config.sportsTeams.map(async (team) => {
-          const fixtures = await getFixturesCached(team.id, config.apiKeys.sports);
+          const fixtures = await getFixturesClient(team.id, config.apiKeys.sports);
           if (!fixtures || fixtures.length === 0) return null;
 
           const liveMatch = fixtures.find((f: any) => 

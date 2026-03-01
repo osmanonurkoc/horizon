@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,7 +5,6 @@ import { type DiscoverConfig } from "@/lib/config-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { CloudRain, Trophy, TrendingUp, Loader2, Sun } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
-import { fetchSportsAction } from "@/app/actions/sports";
 
 interface Insight {
   type: 'weather' | 'sports' | 'market';
@@ -15,6 +13,37 @@ interface Insight {
   icon: any;
   color: string;
   isLive?: boolean;
+}
+
+// Client-side sports fetcher for notifications
+async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
+  const cacheKey = `sports_insight_v1_${teamId}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < 300000) return data;
+    } catch (e) {
+      localStorage.removeItem(cacheKey);
+    }
+  }
+
+  const month = new Date().getMonth();
+  const year = new Date().getFullYear();
+  const season = month < 7 ? year - 1 : year;
+
+  try {
+    const url = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+    const res = await fetch(url, {
+      headers: { "x-apisports-key": apiKey, "Accept": "application/json" }
+    });
+    const data = await res.json();
+    const response = data.response || [];
+    localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
+    return response;
+  } catch (e) {
+    return [];
+  }
 }
 
 export function SmartNotifications({ config }: { config: DiscoverConfig }) {
@@ -68,23 +97,13 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 2. Sports Insight (API-Football)
+      // 2. Sports Insight
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
           
           for (const team of config.sportsTeams) {
-            // Fetch cached season data via server action
-            const month = new Date().getMonth();
-            const year = new Date().getFullYear();
-            const season = month < 7 ? year - 1 : year;
-            
-            const fixtures = await cachedFetch(
-              `sports_fixtures_insight_${team.id}`,
-              () => fetchSportsAction(`fixtures?team=${team.id}&season=${season}`, config.apiKeys.sports),
-              300000 // 5 min cache
-            );
-
+            const fixtures = await fetchSportsInsightsClient(team.id, config.apiKeys.sports);
             if (!fixtures || fixtures.length === 0) continue;
 
             const now = Math.floor(Date.now() / 1000);

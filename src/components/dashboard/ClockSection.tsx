@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -46,7 +45,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
   }, []);
 
   useEffect(() => {
-    // Select a random message and time-based greeting on mount to avoid hydration mismatch
+    // Select greeting and message on mount to avoid hydration mismatch
     const greeting = getTimeGreeting();
     const message = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
     

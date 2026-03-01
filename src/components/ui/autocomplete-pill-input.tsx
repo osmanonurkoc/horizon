@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -10,7 +9,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Pill } from "@/components/ui/pill";
-import { fetchSportsAction } from "@/app/actions/sports";
 
 interface AutocompleteOption {
   label: string;
@@ -51,7 +49,7 @@ export function AutocompletePillInput({
 
     if (!inputValue || inputValue.trim().length < 2) {
       if (searchType !== 'static') {
-        setOptions(prev => prev.length === 0 ? prev : []);
+        if (options.length > 0) setOptions([]);
         return;
       }
     }
@@ -82,9 +80,7 @@ export function AutocompletePillInput({
             })));
           }
         } else if (searchType === 'stock') {
-          // Use AllOrigins proxy for Yahoo Finance to avoid CORS blocks
-          const sanitized = inputValue.replace(/[^a-zA-Z0-9 ]/g, '');
-          const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${sanitized}`)}`;
+          const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${inputValue}`)}`;
           const res = await fetch(url);
           const data = await res.json();
           if (data.quotes) {
@@ -99,10 +95,25 @@ export function AutocompletePillInput({
             setLoading(false);
             return;
           }
-          const sanitized = inputValue.replace(/[^a-zA-Z0-9 ]/g, '');
-          const response = await fetchSportsAction(`teams?search=${encodeURIComponent(sanitized)}`, apiKey);
-          if (response) {
-            setOptions(response.slice(0, 5).map((r: any) => ({
+          // Direct client-side fetch to avoid Server Action 404s
+          const url = `https://v3.football.api-sports.io/teams?search=${encodeURIComponent(inputValue)}`;
+          const res = await fetch(url, {
+            headers: { 
+              "x-apisports-key": apiKey,
+              "Accept": "application/json"
+            }
+          });
+          const data = await res.json();
+          
+          if (data.errors && Object.keys(data.errors).length > 0) {
+            const msg = Object.values(data.errors)[0] as string;
+            setOptions([{ label: `API Error: ${msg}`, value: null }]);
+            setLoading(false);
+            return;
+          }
+          
+          if (data.response) {
+            setOptions(data.response.slice(0, 5).map((r: any) => ({
               label: r.team.name,
               value: { id: r.team.id, name: r.team.name, logo: r.team.logo },
               logo: r.team.logo
@@ -119,7 +130,7 @@ export function AutocompletePillInput({
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [inputValue, searchType, apiKey, staticOptions]);
+  }, [inputValue, searchType, apiKey, staticOptions, options.length]);
 
   const handleSelect = (option: AutocompleteOption) => {
     if (option.value === null) return;
