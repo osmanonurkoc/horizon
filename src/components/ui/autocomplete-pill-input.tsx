@@ -90,33 +90,20 @@ export function AutocompletePillInput({
             })));
           }
         } else if (searchType === 'sport') {
-          if (!apiKey) {
-            setOptions([{ label: "Please enter API key first.", value: null }]);
-            setLoading(false);
-            return;
-          }
-          const url = `https://v3.football.api-sports.io/teams?search=${encodeURIComponent(inputValue)}`;
-          const res = await fetch(url, {
-            headers: { 
-              "x-apisports-key": apiKey,
-              "Accept": "application/json"
-            }
+          // Use TheSportsDB universal proxy
+          const res = await fetch(`/api/sports?endpoint=search&query=${encodeURIComponent(inputValue)}`, {
+            headers: { "x-sports-key": apiKey || '3' }
           });
           const data = await res.json();
           
-          if (data.errors && Object.keys(data.errors).length > 0) {
-            const msg = Object.values(data.errors)[0] as string;
-            setOptions([{ label: `API Error: ${msg}`, value: null }]);
-            setLoading(false);
-            return;
-          }
-          
-          if (data.response) {
-            setOptions(data.response.slice(0, 5).map((r: any) => ({
-              label: r.team.name,
-              value: { id: r.team.id, name: r.team.name, logo: r.team.logo },
-              logo: r.team.logo
+          if (data.teams) {
+            setOptions(data.teams.map((t: any) => ({
+              label: t.strTeam,
+              value: { id: t.idTeam, name: t.strTeam, logo: t.strTeamBadge },
+              logo: t.strTeamBadge
             })));
+          } else {
+            setOptions([]);
           }
         }
       } catch (e) {
@@ -129,25 +116,19 @@ export function AutocompletePillInput({
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [inputValue, searchType, apiKey, staticOptions, options.length]);
+  }, [inputValue, searchType, apiKey]);
 
   const areValuesEqual = (a: any, b: any) => {
-    // Safety checks for null/undefined
-    if (a === null || a === undefined || b === null || b === undefined) {
-      return a === b;
-    }
+    if (!a || !b) return a === b;
     const isAObj = typeof a === 'object';
     const isBObj = typeof b === 'object';
     if (isAObj && isBObj) {
-      // If both are objects (sports teams), compare by ID
       return a.id === b.id;
     }
     return a === b;
   };
 
   const handleSelect = (option: AutocompleteOption) => {
-    if (option.value === null) return;
-    
     if (isMulti) {
       const exists = values.some(v => areValuesEqual(v, option.value));
       if (!exists) {
@@ -160,13 +141,13 @@ export function AutocompletePillInput({
     setInputValue("");
   };
 
-  const getLabel = (val: any) => {
-    if (val !== null && typeof val === 'object') return val.name;
-    return val;
-  };
-
   const isSelected = (optionValue: any) => {
     return values.some(v => areValuesEqual(v, optionValue));
+  };
+
+  const getLabel = (val: any) => {
+    if (val && typeof val === 'object') return val.name;
+    return val;
   };
 
   return (
@@ -193,7 +174,7 @@ export function AutocompletePillInput({
             {loading ? (
               <div className="py-6 flex items-center justify-center text-muted-foreground">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                <span>Searching...</span>
+                <span>Searching Stadiums...</span>
               </div>
             ) : options.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">

@@ -15,64 +15,6 @@ interface Insight {
   isLive?: boolean;
 }
 
-/**
- * Client-side fetcher for notifications - USES UNIFIED SERVER PROXY
- * Ensures stability and navigates CORS/Season restrictions.
- * Uses unified cache key shared with SportsWidget.
- */
-async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
-  const cacheKey = `sports_data_v5_${teamId}`;
-  const cached = localStorage.getItem(cacheKey);
-  if (cached) {
-    try {
-      const { data, timestamp } = JSON.parse(cached);
-      // Cache for 5 minutes
-      if (Date.now() - timestamp < 300000) return data;
-    } catch (e) {
-      localStorage.removeItem(cacheKey);
-    }
-  }
-
-  try {
-    const month = new Date().getMonth();
-    const year = new Date().getFullYear();
-    const season = month < 7 ? year - 1 : year;
-
-    // Fetch via our local server-side proxy
-    const url = `/api/sports?team=${teamId}&season=${season}`;
-    const res = await fetch(url, {
-      headers: { 
-        "x-apisports-key": apiKey, 
-        "Accept": "application/json" 
-      }
-    });
-    const data = await res.json();
-    
-    // Self-healing fallback for free tier season restrictions
-    if (data.errors && Object.values(data.errors)[0]?.toString().includes("try from")) {
-      const errorStr = Object.values(data.errors)[0] as string;
-      const match = errorStr.match(/to (\d{4})/);
-      const fallbackSeason = match ? match[1] : '2024';
-      
-      const fallbackUrl = `/api/sports?team=${teamId}&season=${fallbackSeason}`;
-      const fallbackRes = await fetch(fallbackUrl, {
-        headers: { "x-apisports-key": apiKey, "Accept": "application/json" }
-      });
-      const fallbackData = await fallbackRes.json();
-      const response = fallbackData.response || [];
-      localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
-      return response;
-    }
-
-    const response = data.response || [];
-    localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
-    return response;
-  } catch (e) {
-    console.warn("Sports Fetch Insight Failed:", e);
-    return [];
-  }
-}
-
 export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,7 +55,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               newInsights.push({
                 type: 'weather',
                 title: 'Clear Skies',
-                message: `Conditions remain favorable for outdoor activities in ${config.location}.`,
+                message: `Optimal conditions for outdoor activities in ${config.location}.`,
                 icon: Sun,
                 color: 'blue'
               });
@@ -124,63 +66,57 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 2. Sports Insight (Aggregated Priority: Live > Next)
-      // Removed "Latest Result" to focus on upcoming/live events as requested.
-      if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
+      // 2. Sports Insight (Aggregated Priority: Next Match > Latest Result)
+      if (config.enabledWidgets.sports && config.sportsTeams.length > 0) {
         try {
-          const now = Math.floor(Date.now() / 1000);
-          let allFixtures: any[] = [];
+          let sportInsight: Insight | null = null;
 
-          // Sequential fetch with 1s delay to protect rate limits (10req/min)
           for (const team of config.sportsTeams) {
-            const fixtures = await fetchSportsInsightsClient(team.id, config.apiKeys.sports);
-            if (fixtures && fixtures.length > 0) {
-              allFixtures = [...allFixtures, ...fixtures];
-            }
-            if (config.sportsTeams.length > 1) {
-              await new Promise(res => setTimeout(res, 1000));
+            // Check for next match first
+            const nextRes = await fetch(`/api/sports?endpoint=next&team=${team.id}`, {
+              headers: { "x-sports-key": config.apiKeys.sports || '3' }
+            });
+            const nextData = await nextRes.json();
+
+            if (nextData.events && nextData.events.length > 0) {
+              const next = nextData.events[0];
+              const date = new Date(next.dateEvent).toLocaleDateString();
+              sportInsight = {
+                type: 'sports',
+                title: 'NEXT MATCH',
+                message: `${next.strHomeTeam} vs ${next.strAwayTeam} on ${date}`,
+                icon: Trophy,
+                color: 'red'
+              };
+              break; // Prioritize first found next match
             }
           }
 
-          if (allFixtures.length > 0) {
-            const liveMatch = allFixtures.find(f => 
-              ['1H', '2H', 'HT', 'ET', 'P', 'BT', 'LIVE'].includes(f.fixture.status.short)
-            );
-
-            const nextMatch = allFixtures
-              .filter(f => f.fixture.timestamp > now && ['NS', 'TBD'].includes(f.fixture.status.short))
-              .sort((a, b) => a.fixture.timestamp - b.fixture.timestamp)[0];
-
-            let sportInsight: Insight | null = null;
-
-            if (liveMatch) {
+          // If no next match found for any team, look for latest result of first team
+          if (!sportInsight && config.sportsTeams.length > 0) {
+            const lastRes = await fetch(`/api/sports?endpoint=last&team=${config.sportsTeams[0].id}`, {
+              headers: { "x-sports-key": config.apiKeys.sports || '3' }
+            });
+            const lastData = await lastRes.json();
+            if (lastData.results && lastData.results.length > 0) {
+              const last = lastData.results[0];
               sportInsight = {
                 type: 'sports',
-                title: 'LIVE SCORE',
-                message: `${liveMatch.teams.home.name} ${liveMatch.goals.home} - ${liveMatch.goals.away} ${liveMatch.teams.away.name} (${liveMatch.fixture.status.elapsed}')`,
-                icon: Trophy,
-                color: 'red',
-                isLive: true
-              };
-            } else if (nextMatch) {
-              const date = new Date(nextMatch.fixture.date).toLocaleDateString();
-              sportInsight = {
-                type: 'sports',
-                title: 'Next Match',
-                message: `${nextMatch.teams.home.name} vs ${nextMatch.teams.away.name} on ${date}`,
+                title: 'LATEST RESULT',
+                message: `${last.strHomeTeam} ${last.intHomeScore} - ${last.intAwayScore} ${last.strAwayTeam}`,
                 icon: Trophy,
                 color: 'red'
               };
             }
-
-            if (sportInsight) newInsights.push(sportInsight);
           }
+
+          if (sportInsight) newInsights.push(sportInsight);
         } catch (e) {
           console.warn("Sports Insight Failed:", e);
         }
       }
 
-      // 3. Market Insight - USES NATIVE SERVER PROXY
+      // 3. Market Insight
       if (config.enabledWidgets.market && config.stocks.length > 0) {
         try {
           const symbol = config.stocks[0].split(' ')[0];
@@ -202,7 +138,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               newInsights.push({
                 type: 'market',
                 title: 'Portfolio Trend',
-                message: `${symbol} is ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% in this session.`,
+                message: `${symbol} is ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% today.`,
                 icon: TrendingUp,
                 color: 'emerald'
               });
@@ -224,7 +160,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
     return (
       <div className="flex gap-4 justify-center items-center py-6">
         <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
-        <span className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Synthesizing Briefing...</span>
+        <span className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Synthesizing Horizon...</span>
       </div>
     );
   }
@@ -242,9 +178,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300';
           
           const iconBg = 
-            insight.color === 'blue' ? 'bg-blue-500 shadow-blue-500/30' :
-            insight.color === 'red' ? 'bg-red-500 shadow-red-500/30' :
-            'bg-emerald-500 shadow-emerald-500/30';
+            insight.color === 'blue' ? 'bg-blue-500' :
+            insight.color === 'red' ? 'bg-red-500' :
+            'bg-emerald-500';
 
           return (
             <Card key={idx} className={`rounded-[2rem] border shadow-sm group transition-all hover:scale-[1.02] hover:shadow-lg ${colorClass}`}>

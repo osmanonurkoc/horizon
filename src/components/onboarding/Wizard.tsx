@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AutocompletePillInput } from "@/components/ui/autocomplete-pill-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Static options moved outside to prevent re-renders
 const NEWS_TOPICS = ['Technology', 'Science', 'Business', 'Sports', 'Health', 'Entertainment'];
 const NEWS_LANGS = ['en', 'es', 'fr', 'de', 'it', 'tr'];
 
@@ -147,7 +146,7 @@ export default function Wizard({ onComplete }: { onComplete: (config: DiscoverCo
                 {[
                   { id: 'weather', label: 'OpenWeather', link: 'https://home.openweathermap.org/users/sign_up', help: 'Get a free key at openweathermap.org', tip: 'Weather updates' },
                   { id: 'news', label: 'GNews API', link: 'https://gnews.io/register', help: 'Get a free key at gnews.io', tip: 'News masonry' },
-                  { id: 'sports', label: 'API-Football', link: 'https://dashboard.api-football.com/register', help: 'Get a free key at api-football.com', tip: 'Live scores' }
+                  { id: 'sports', label: 'TheSportsDB (Patreon)', link: 'https://www.thesportsdb.com/api.php', help: 'Get a key on Patreon ($3/mo) for full access.', tip: 'Stadium Central' }
                 ].map((api) => (
                   <div key={api.id} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -169,7 +168,7 @@ export default function Wizard({ onComplete }: { onComplete: (config: DiscoverCo
                     <Input 
                       id={api.id}
                       type="password"
-                      placeholder="Paste your key here..."
+                      placeholder={api.id === 'sports' ? "Key (or leave empty for free-tier test '3')" : "Paste your key here..."}
                       className="rounded-xl h-12"
                       value={(config.apiKeys as any)[api.id] || ""}
                       onChange={(e) => setConfig(c => ({
@@ -233,7 +232,7 @@ export default function Wizard({ onComplete }: { onComplete: (config: DiscoverCo
         {step === 3 && (
           <>
             <CardHeader className="pt-8 pb-6 px-10">
-              <CardTitle className="text-3xl font-headline font-bold">Discovery Tuning</CardTitle>
+              <CardTitle className="text-3xl font-headline font-bold">Stadium Tuning</CardTitle>
               <CardDescription className="text-lg font-medium">Step 3: Dynamic data fetching and discovery.</CardDescription>
             </CardHeader>
             <CardContent className="px-10 space-y-10 max-h-[500px] overflow-y-auto pr-6 custom-scrollbar">
@@ -253,13 +252,13 @@ export default function Wizard({ onComplete }: { onComplete: (config: DiscoverCo
 
               {config.enabledWidgets.sports && (
                 <div className="space-y-4">
-                  <Label className="text-base font-semibold">Sports Teams (API-Football)</Label>
+                  <Label className="text-base font-semibold">Sports Teams (TheSportsDB)</Label>
                   <AutocompletePillInput 
                     searchType="sport"
                     apiKey={config.apiKeys.sports}
                     values={config.sportsTeams}
                     onChange={(vals) => setConfig(c => ({ ...c, sportsTeams: vals }))}
-                    placeholder="Search teams (e.g. Real Madrid, Arsenal)..."
+                    placeholder="Search teams (e.g. Manchester United, Lakers)..."
                   />
                 </div>
               )}

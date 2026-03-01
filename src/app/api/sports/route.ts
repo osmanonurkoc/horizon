@@ -1,35 +1,43 @@
 import { NextResponse } from 'next/server';
 
 /**
- * Server-side proxy for API-Football to bypass client-side CORS restrictions.
+ * Server-side proxy for TheSportsDB to bypass client-side CORS restrictions.
+ * Supports team search, fixture lookup (last/next), and league standings.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const team = searchParams.get('team');
-  const season = searchParams.get('season');
-  const key = request.headers.get('x-apisports-key');
+  const endpoint = searchParams.get('endpoint');
+  const teamId = searchParams.get('team');
+  const query = searchParams.get('query');
+  const leagueId = searchParams.get('league');
+  const season = searchParams.get('season') || '2024-2025';
+  
+  // Use user key from header or fallback to free test key '3'
+  const apiKey = request.headers.get('x-sports-key') || '3';
+  const baseUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}`;
 
-  if (!team || !season || !key) {
-    return NextResponse.json({ 
-      errors: { msg: "Missing parameters: team, season, or x-apisports-key header required" } 
-    }, { status: 400 });
-  }
-
+  let targetUrl = '';
+  
   try {
-    const res = await fetch(`https://v3.football.api-sports.io/fixtures?team=${team}&season=${season}`, {
-      headers: { 
-        'x-apisports-key': key,
-        'Accept': 'application/json'
-      },
-      cache: 'no-store'
-    });
+    if (endpoint === 'search') {
+      targetUrl = `${baseUrl}/searchteams.php?t=${encodeURIComponent(query || '')}`;
+    } else if (endpoint === 'next') {
+      targetUrl = `${baseUrl}/eventsnext.php?id=${teamId}`;
+    } else if (endpoint === 'last') {
+      targetUrl = `${baseUrl}/eventslast.php?id=${teamId}`;
+    } else if (endpoint === 'standings') {
+      targetUrl = `${baseUrl}/lookuptable.php?l=${leagueId}&s=${season}`;
+    } else {
+      return NextResponse.json({ error: "Invalid endpoint requested" }, { status: 400 });
+    }
 
+    const res = await fetch(targetUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`External API returned ${res.status}`);
+    
     const data = await res.json();
     return NextResponse.json(data);
-  } catch (err) {
-    console.error("Sports Proxy Error:", err);
-    return NextResponse.json({ 
-      errors: { msg: "Stadium Network link failed at the proxy level." } 
-    }, { status: 500 });
+  } catch (error: any) {
+    console.error("TheSportsDB Proxy Error:", error.message);
+    return NextResponse.json({ error: "Stadium connection failed." }, { status: 500 });
   }
 }

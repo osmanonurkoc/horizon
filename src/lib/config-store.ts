@@ -1,7 +1,7 @@
 import { type PersonalizedBriefingInput } from "@/ai/flows/personalized-briefing";
 
 export interface SportsTeam {
-  id: number;
+  id: string; // Changed from number to string for TheSportsDB compatibility
   name: string;
   logo: string;
 }
