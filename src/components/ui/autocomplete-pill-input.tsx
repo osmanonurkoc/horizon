@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Pill } from "@/components/ui/pill";
+import { fetchSportsAction } from "@/app/actions/sports";
 
 interface AutocompleteOption {
   label: string;
@@ -39,79 +40,84 @@ export function AutocompletePillInput({
   const [inputValue, setInputValue] = React.useState("");
   const [options, setOptions] = React.useState<AutocompleteOption[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const [activeIndex, setActiveIndex] = React.useState(-1);
-  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Use a ref for the timeout to handle cleanup reliably
   const searchTimeout = React.useRef<NodeJS.Timeout | null>(null);
 
-  const performSearch = React.useCallback(async (query: string) => {
-    if (!query || query.trim().length < 2) {
+  // BREAK THE INFINITE LOOP: Move search logic directly inside useEffect
+  React.useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+    if (!inputValue || inputValue.trim().length < 2) {
       if (searchType !== 'static') {
         setOptions([]);
         return;
       }
     }
 
+    // Static filtering is synchronous
     if (searchType === 'static') {
       const filtered = staticOptions
-        .filter(opt => opt.toLowerCase().includes(query.toLowerCase()))
+        .filter(opt => opt.toLowerCase().includes(inputValue.toLowerCase()))
         .map(opt => ({ label: opt, value: opt }));
       setOptions(filtered);
       return;
     }
 
-    setLoading(true);
-    try {
-      if (searchType === 'location') {
-        const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5`);
-        const data = await res.json();
-        if (data.results) {
-          setOptions(data.results.map((r: any) => ({
-            label: `${r.name}, ${r.country}`,
-            value: `${r.name}, ${r.country}`
-          })));
+    // Debounced async search
+    searchTimeout.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        if (searchType === 'location') {
+          const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(inputValue)}&count=5`);
+          const data = await res.json();
+          if (data.results) {
+            setOptions(data.results.map((r: any) => ({
+              label: `${r.name}, ${r.country}`,
+              value: `${r.name}, ${r.country}`
+            })));
+          }
+        } else if (searchType === 'stock') {
+          // Stocks still use proxy but we sanitize the query
+          const sanitized = inputValue.replace(/[^a-zA-Z0-9 ]/g, '');
+          const url = `https://corsproxy.io/?${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${sanitized}`)}`;
+          const res = await fetch(url);
+          const data = await res.json();
+          if (data.quotes) {
+            setOptions(data.quotes.slice(0, 5).map((q: any) => ({
+              label: `${q.symbol} - ${q.shortname || q.longname || ''}`,
+              value: q.symbol
+            })));
+          }
+        } else if (searchType === 'sport') {
+          if (!apiKey) {
+            setOptions([{ label: "Please enter API key first.", value: null }]);
+            setLoading(false);
+            return;
+          }
+          // Use Server Action for Sports to bypass CORS/Preflight
+          const sanitized = inputValue.replace(/[^a-zA-Z0-9 ]/g, '');
+          const response = await fetchSportsAction(`teams?search=${encodeURIComponent(sanitized)}`, apiKey);
+          if (response) {
+            setOptions(response.slice(0, 5).map((r: any) => ({
+              label: r.team.name,
+              value: { id: r.team.id, name: r.team.name, logo: r.team.logo },
+              logo: r.team.logo
+            })));
+          }
         }
-      } else if (searchType === 'stock') {
-        const url = `https://corsproxy.io/?${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}`)}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.quotes) {
-          setOptions(data.quotes.slice(0, 5).map((q: any) => ({
-            label: `${q.symbol} - ${q.shortname || q.longname || ''}`,
-            value: q.symbol
-          })));
-        }
-      } else if (searchType === 'sport') {
-        if (!apiKey) {
-          setOptions([{ label: "Please enter API key first.", value: null }]);
-          return;
-        }
-        const url = `https://corsproxy.io/?${encodeURIComponent(`https://v3.football.api-sports.io/teams?search=${query}`)}`;
-        const res = await fetch(url, { headers: { "x-apisports-key": apiKey } });
-        const data = await res.json();
-        if (data.response) {
-          setOptions(data.response.slice(0, 5).map((r: any) => ({
-            label: r.team.name,
-            value: { id: r.team.id, name: r.team.name, logo: r.team.logo },
-            logo: r.team.logo
-          })));
-        }
+      } catch (e) {
+        console.warn(`Autocomplete search error:`, e);
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.warn(`Autocomplete fetch error (${searchType}):`, e);
-    } finally {
-      setLoading(false);
-    }
-  }, [searchType, staticOptions, apiKey]);
-
-  React.useEffect(() => {
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(() => {
-      performSearch(inputValue);
     }, 500);
+
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [inputValue, performSearch]);
+  }, [inputValue, searchType, apiKey, staticOptions]);
 
   const handleSelect = (option: AutocompleteOption) => {
     if (option.value === null) return;
@@ -128,7 +134,6 @@ export function AutocompletePillInput({
       setOpen(false);
     }
     setInputValue("");
-    setActiveIndex(-1);
   };
 
   const getLabel = (val: any) => {
@@ -156,7 +161,7 @@ export function AutocompletePillInput({
           className="w-[--radix-popover-trigger-width] p-0 rounded-xl overflow-hidden shadow-xl border-none z-[50]" 
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <div className="max-h-[300px] overflow-y-auto" ref={scrollContainerRef}>
+          <div className="max-h-[300px] overflow-y-auto">
             {loading ? (
               <div className="py-6 flex items-center justify-center text-muted-foreground">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -171,10 +176,7 @@ export function AutocompletePillInput({
                 {options.map((option, index) => (
                   <div
                     key={`${option.label}-${index}`}
-                    className={cn(
-                      "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm outline-none transition-colors",
-                      activeIndex === index ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
-                    )}
+                    className="relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       handleSelect(option);

@@ -6,6 +6,7 @@ import { Trophy, ArrowRight, ShieldCheck, Loader2, AlertCircle, History, Timer }
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { fetchSportsAction } from "@/app/actions/sports";
 
 interface TeamResult {
   teamName: string;
@@ -16,14 +17,14 @@ interface TeamResult {
   date: string;
 }
 
-// Single Fetch Strategy with Caching
-async function fetchTeamFixtures(teamId: number, apiKey: string) {
-  const cacheKey = `sports_fixtures_widget_${teamId}`;
+// Single Fetch Strategy with Caching and Server Action
+async function getFixturesCached(teamId: number, apiKey: string) {
+  const cacheKey = `sports_fixtures_v2_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
       const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < 300000) return data; // 5 min cache
+      if (Date.now() - timestamp < 300000) return data; 
     } catch (e) {
       localStorage.removeItem(cacheKey);
     }
@@ -33,24 +34,10 @@ async function fetchTeamFixtures(teamId: number, apiKey: string) {
   const year = new Date().getFullYear();
   const season = month < 7 ? year - 1 : year;
 
-  const targetUrl = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
-  const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-  
   try {
-    const res = await fetch(url, { 
-      headers: { "x-apisports-key": apiKey },
-      signal: AbortSignal.timeout(10000)
-    });
-    
-    if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-    const json = await res.json();
-    
-    if (json.errors && Object.keys(json.errors).length > 0) {
-      throw new Error(Object.values(json.errors)[0] as string);
-    }
-    
-    localStorage.setItem(cacheKey, JSON.stringify({ data: json.response, timestamp: Date.now() }));
-    return json.response;
+    const response = await fetchSportsAction(`fixtures?team=${teamId}&season=${season}`, apiKey);
+    localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
+    return response;
   } catch (e) {
     console.warn(`Sports Widget Fetch Error for team ${teamId}:`, e);
     return [];
@@ -73,10 +60,9 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     try {
       const teamResults = await Promise.all(
         config.sportsTeams.map(async (team) => {
-          const fixtures = await fetchTeamFixtures(team.id, config.apiKeys.sports);
+          const fixtures = await getFixturesCached(team.id, config.apiKeys.sports);
           if (!fixtures || fixtures.length === 0) return null;
 
-          // Check for LIVE
           const liveMatch = fixtures.find((f: any) => 
             ['1H', '2H', 'HT', 'ET', 'P', 'BT'].includes(f.fixture.status.short)
           );
@@ -93,7 +79,6 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
             };
           }
 
-          // Otherwise get the most recent finished match
           const finishedMatches = fixtures
             .filter((f: any) => f.fixture.status.short === 'FT' || f.fixture.status.short === 'AET' || f.fixture.status.short === 'PEN')
             .sort((a: any, b: any) => b.fixture.timestamp - a.fixture.timestamp);
@@ -118,7 +103,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
       const validResults = teamResults.filter((r): r is TeamResult => r !== null);
       setResults(validResults);
     } catch (err: any) {
-      setError(`Sports Link Error: ${err.message}`);
+      setError(`Stadium Link Interrupted: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -134,7 +119,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
         <CardContent className="flex flex-col items-center justify-center h-48 text-muted-foreground p-6 text-center">
           <Trophy className="w-12 h-12 mb-2 opacity-30" />
           <p className="font-medium">Sports Setup Required</p>
-          <p className="text-xs">Add API key and teams in settings.</p>
+          <p className="text-xs">Configure teams in Stadium Tuning.</p>
         </CardContent>
       </Card>
     );
@@ -184,7 +169,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
             )) : (
               <div className="py-10 text-center space-y-2">
                 <Trophy className="w-8 h-8 mx-auto text-muted-foreground/30" />
-                <p className="text-sm font-bold text-muted-foreground">No match signals for your teams.</p>
+                <p className="text-sm font-bold text-muted-foreground">No fixtures for tracked teams.</p>
               </div>
             )}
           </CardContent>
@@ -201,7 +186,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
           <div className="p-6 bg-secondary/5 rounded-3xl border border-secondary/10 space-y-4">
             <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4 text-secondary" /> Network Status</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Global stadium data is cached for 5 minutes. Live indicators will automatically activate during match time.
+              Global stadium data is cached for 5 minutes. Live indicators automatically activate during match time.
             </p>
           </div>
           <div className="space-y-3">

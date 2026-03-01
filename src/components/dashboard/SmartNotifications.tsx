@@ -5,6 +5,7 @@ import { type DiscoverConfig } from "@/lib/config-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { CloudRain, Trophy, TrendingUp, Loader2, Sun } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
+import { fetchSportsAction } from "@/app/actions/sports";
 
 interface Insight {
   type: 'weather' | 'sports' | 'market';
@@ -15,14 +16,14 @@ interface Insight {
   isLive?: boolean;
 }
 
-// Single Fetch Strategy with Caching
-async function fetchTeamFixtures(teamId: number, apiKey: string) {
-  const cacheKey = `sports_fixtures_${teamId}`;
+// Single Fetch Strategy with Caching and Server Action
+async function getFixturesCached(teamId: number, apiKey: string) {
+  const cacheKey = `sports_fixtures_v2_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
       const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < 300000) return data; // 5 min cache
+      if (Date.now() - timestamp < 300000) return data; 
     } catch (e) {
       localStorage.removeItem(cacheKey);
     }
@@ -32,26 +33,12 @@ async function fetchTeamFixtures(teamId: number, apiKey: string) {
   const year = new Date().getFullYear();
   const season = month < 7 ? year - 1 : year;
 
-  const targetUrl = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
-  const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-  
   try {
-    const res = await fetch(url, { 
-      headers: { "x-apisports-key": apiKey },
-      signal: AbortSignal.timeout(10000)
-    });
-    
-    if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-    const json = await res.json();
-    
-    if (json.errors && Object.keys(json.errors).length > 0) {
-      throw new Error(Object.values(json.errors)[0] as string);
-    }
-    
-    localStorage.setItem(cacheKey, JSON.stringify({ data: json.response, timestamp: Date.now() }));
-    return json.response;
+    const response = await fetchSportsAction(`fixtures?team=${teamId}&season=${season}`, apiKey);
+    localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
+    return response;
   } catch (e) {
-    console.warn(`Sports Fetch Error for team ${teamId}:`, e);
+    console.warn(`Sports Insight Fetch Error for team ${teamId}:`, e);
     return [];
   }
 }
@@ -65,11 +52,11 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       setLoading(true);
       const newInsights: Insight[] = [];
 
-      // 1. Weather Event Insight
+      // 1. Weather Insight
       if (config.enabledWidgets.weather && config.location && config.apiKeys.weather) {
         try {
           const forecast = await cachedFetch(
-            `insight_weather_event_${config.location}`,
+            `insight_weather_v2_${config.location}`,
             async () => {
               const url = `https://corsproxy.io/?https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
               const res = await fetch(url);
@@ -80,8 +67,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
 
           if (forecast?.list) {
             const rainItem = forecast.list.find((item: any) => 
-              item.weather[0].main.toLowerCase().includes('rain') || 
-              item.weather[0].description.toLowerCase().includes('rain')
+              item.weather[0].main.toLowerCase().includes('rain')
             );
             
             if (rainItem) {
@@ -89,7 +75,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               newInsights.push({
                 type: 'weather',
                 title: 'Weather Shift',
-                message: `Rain expected to begin around ${rainTime} in ${config.location}.`,
+                message: `Rain expected around ${rainTime} in ${config.location}.`,
                 icon: CloudRain,
                 color: 'blue'
               });
@@ -97,7 +83,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               newInsights.push({
                 type: 'weather',
                 title: 'Clear Skies',
-                message: `Conditions remain favorable for outdoor activities in ${config.location}.`,
+                message: `Skies remain clear in ${config.location}. Perfect for the day ahead.`,
                 icon: Sun,
                 color: 'blue'
               });
@@ -108,14 +94,14 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 2. Sports Insight
+      // 2. Sports Insight (Strict API-Football)
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
           const now = Math.floor(Date.now() / 1000);
           
           for (const team of config.sportsTeams) {
-            const fixtures = await fetchTeamFixtures(team.id, config.apiKeys.sports);
+            const fixtures = await getFixturesCached(team.id, config.apiKeys.sports);
             if (!fixtures || fixtures.length === 0) continue;
 
             const liveMatch = fixtures.find((f: any) => 
@@ -152,7 +138,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           }
           if (sportInsight) newInsights.push(sportInsight);
         } catch (e) {
-          console.warn("Global Sports Insight Error:", e);
+          console.warn("Sports Insight Failed:", e);
         }
       }
 
@@ -161,13 +147,13 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         try {
           const symbol = config.stocks[0].split(' ')[0];
           const marketInsight = await cachedFetch(
-            `insight_market_pulse_${symbol}`,
+            `insight_market_v2_${symbol}`,
             async () => {
-              const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-              const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+              const url = `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`)}`;
+              const res = await fetch(url);
               return res.ok ? await res.json() : null;
             },
-            EXPIRY_TIMES.WEATHER
+            EXPIRY_TIMES.MARKET
           );
 
           const meta = marketInsight?.chart?.result?.[0]?.meta;
@@ -179,7 +165,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               newInsights.push({
                 type: 'market',
                 title: 'Portfolio Trend',
-                message: `${symbol} is currently ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% in this session.`,
+                message: `${symbol} is ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% today.`,
                 icon: TrendingUp,
                 color: 'emerald'
               });
@@ -214,9 +200,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         {insights.map((insight, idx) => {
           const Icon = insight.icon;
           const colorClass = 
-            insight.color === 'blue' ? 'bg-blue-500/10 border-l-blue-500 text-blue-700 dark:text-blue-400' :
-            insight.color === 'red' ? 'bg-red-500/10 border-l-red-500 text-red-700 dark:text-red-400' :
-            'bg-emerald-500/10 border-l-emerald-500 text-emerald-700 dark:text-emerald-400';
+            insight.color === 'blue' ? 'bg-blue-500/10 border-l-blue-500 text-blue-700' :
+            insight.color === 'red' ? 'bg-red-500/10 border-l-red-500 text-red-700' :
+            'bg-emerald-500/10 border-l-emerald-500 text-emerald-700';
           
           const iconBg = 
             insight.color === 'blue' ? 'bg-blue-500' :

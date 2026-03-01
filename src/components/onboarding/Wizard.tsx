@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AutocompletePillInput } from "@/components/ui/autocomplete-pill-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Static options moved outside to prevent re-renders
+const NEWS_TOPICS = ['Technology', 'Science', 'Business', 'Sports', 'Health', 'Entertainment'];
+const NEWS_LANGS = ['en', 'es', 'fr', 'de', 'it', 'tr'];
 
 export default function Wizard({ onComplete }: { onComplete: (config: DiscoverConfig) => void }) {
   const [step, setStep] = useState(1);
@@ -278,14 +282,14 @@ export default function Wizard({ onComplete }: { onComplete: (config: DiscoverCo
                   <div className="grid grid-cols-2 gap-4">
                     <AutocompletePillInput 
                       searchType="static"
-                      staticOptions={['Technology', 'Science', 'Business', 'Sports', 'Health', 'Entertainment']}
+                      staticOptions={NEWS_TOPICS}
                       values={config.newsTopics}
                       onChange={(vals) => setConfig(c => ({ ...c, newsTopics: vals }))}
                       placeholder="Add topics..."
                     />
                     <AutocompletePillInput 
                       searchType="static"
-                      staticOptions={['en', 'es', 'fr', 'de', 'it', 'tr']}
+                      staticOptions={NEWS_LANGS}
                       values={config.newsLanguages}
                       onChange={(vals) => setConfig(c => ({ ...c, newsLanguages: vals }))}
                       placeholder="Add languages..."
