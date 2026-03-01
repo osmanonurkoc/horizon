@@ -44,30 +44,23 @@ export function AutocompletePillInput({
   const [options, setOptions] = React.useState<AutocompleteOption[]>([]);
   const [loading, setLoading] = React.useState(false);
 
-  // Use a ref for the timeout to handle cleanup reliably
   const searchTimeout = React.useRef<NodeJS.Timeout | null>(null);
 
-  // BREAK THE INFINITE LOOP: Move search logic directly inside useEffect
   React.useEffect(() => {
-    // Clear previous timeout
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
-    // If input is short, clear options and return
     if (!inputValue || inputValue.trim().length < 2) {
       if (searchType !== 'static') {
-        // Only update if options isn't already empty to prevent loops
         setOptions(prev => prev.length === 0 ? prev : []);
         return;
       }
     }
 
-    // Static filtering is synchronous
     if (searchType === 'static') {
       const filtered = staticOptions
         .filter(opt => opt.toLowerCase().includes(inputValue.toLowerCase()))
         .map(opt => ({ label: opt, value: opt }));
       
-      // Basic check to prevent redundant updates
       setOptions(prev => {
         const isSame = prev.length === filtered.length && 
                       prev.every((v, i) => v.value === filtered[i].value);
@@ -76,7 +69,6 @@ export function AutocompletePillInput({
       return;
     }
 
-    // Debounced async search
     searchTimeout.current = setTimeout(async () => {
       setLoading(true);
       try {
@@ -90,9 +82,9 @@ export function AutocompletePillInput({
             })));
           }
         } else if (searchType === 'stock') {
-          // Stocks still use proxy but we sanitize the query
+          // Use AllOrigins proxy for Yahoo Finance to avoid CORS blocks
           const sanitized = inputValue.replace(/[^a-zA-Z0-9 ]/g, '');
-          const url = `https://corsproxy.io/?${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${sanitized}`)}`;
+          const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${sanitized}`)}`;
           const res = await fetch(url);
           const data = await res.json();
           if (data.quotes) {
@@ -107,7 +99,6 @@ export function AutocompletePillInput({
             setLoading(false);
             return;
           }
-          // Use Server Action for Sports to bypass CORS/Preflight
           const sanitized = inputValue.replace(/[^a-zA-Z0-9 ]/g, '');
           const response = await fetchSportsAction(`teams?search=${encodeURIComponent(sanitized)}`, apiKey);
           if (response) {
@@ -152,6 +143,14 @@ export function AutocompletePillInput({
     return val;
   };
 
+  const isSelected = (optionValue: any) => {
+    return values.some(v => 
+      typeof v === 'object' && typeof optionValue === 'object' 
+        ? v.id === optionValue.id 
+        : v === optionValue
+    );
+  };
+
   return (
     <div className="space-y-3 w-full">
       <Popover open={open} onOpenChange={setOpen}>
@@ -184,19 +183,26 @@ export function AutocompletePillInput({
               </div>
             ) : (
               <div className="p-1">
-                {options.map((option, index) => (
-                  <div
-                    key={`${option.label}-${index}`}
-                    className="relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelect(option);
-                    }}
-                  >
-                    {option.logo && <img src={option.logo} alt="" className="w-4 h-4 mr-2" />}
-                    {option.label}
-                  </div>
-                ))}
+                {options.map((option, index) => {
+                  const selected = isSelected(option.value);
+                  return (
+                    <div
+                      key={`${option.label}-${index}`}
+                      className={cn(
+                        "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground",
+                        selected && "bg-accent/50"
+                      )}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelect(option);
+                      }}
+                    >
+                      {option.logo && <img src={option.logo} alt="" className="w-4 h-4 mr-2" />}
+                      <span className="flex-1">{option.label}</span>
+                      {selected && <Check className="w-4 h-4 ml-auto text-primary" />}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
