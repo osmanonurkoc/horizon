@@ -119,25 +119,39 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 2. Sports Insight (Live + Next Match)
+      // 2. Sports Insight (Aggregated Priority: Live > Next > Latest)
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
-          let sportInsight: Insight | null = null;
           const now = Math.floor(Date.now() / 1000);
-          
-          const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-          
+          let allFixtures: any[] = [];
+
+          // Aggregate all fixtures for every tracked team first
           for (const team of config.sportsTeams) {
             const fixtures = await fetchSportsInsightsClient(team.id, config.apiKeys.sports);
+            if (fixtures && fixtures.length > 0) {
+              allFixtures = [...allFixtures, ...fixtures];
+            }
             // Rate limit protection: 1 second delay between team fetches
-            await delay(1000);
+            await new Promise(res => setTimeout(res, 1000));
+          }
 
-            if (!fixtures || fixtures.length === 0) continue;
-
-            // Check for Live
-            const liveMatch = fixtures.find((f: any) => 
-              ['1H', '2H', 'HT', 'ET', 'P', 'BT'].includes(f.fixture.status.short)
+          if (allFixtures.length > 0) {
+            // Priority 1: Check if ANY team is currently playing
+            const liveMatch = allFixtures.find(f => 
+              ['1H', '2H', 'HT', 'ET', 'P', 'BT', 'LIVE'].includes(f.fixture.status.short)
             );
+
+            // Priority 2: Check for the closest NEXT match among all teams
+            const nextMatch = allFixtures
+              .filter(f => f.fixture.timestamp > now && ['NS', 'TBD'].includes(f.fixture.status.short))
+              .sort((a, b) => a.fixture.timestamp - b.fixture.timestamp)[0];
+              
+            // Priority 3: Fallback to the absolute LATEST finished match
+            const lastMatch = allFixtures
+              .filter(f => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short))
+              .sort((a, b) => b.fixture.timestamp - a.fixture.timestamp)[0];
+
+            let sportInsight: Insight | null = null;
 
             if (liveMatch) {
               sportInsight = {
@@ -148,15 +162,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 color: 'red',
                 isLive: true
               };
-              break;
-            }
-
-            // Check for Next
-            const nextMatch = fixtures
-              .filter((f: any) => f.fixture.timestamp > now && f.fixture.status.short === 'NS')
-              .sort((a: any, b: any) => a.fixture.timestamp - b.fixture.timestamp)[0];
-
-            if (nextMatch) {
+            } else if (nextMatch) {
               const date = new Date(nextMatch.fixture.date).toLocaleDateString();
               sportInsight = {
                 type: 'sports',
@@ -165,10 +171,18 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 icon: Trophy,
                 color: 'red'
               };
-              break; 
+            } else if (lastMatch) {
+              sportInsight = {
+                type: 'sports',
+                title: 'Latest Result',
+                message: `${lastMatch.teams.home.name} ${lastMatch.goals.home} - ${lastMatch.goals.away} ${lastMatch.teams.away.name}`,
+                icon: Trophy,
+                color: 'red'
+              };
             }
+
+            if (sportInsight) newInsights.push(sportInsight);
           }
-          if (sportInsight) newInsights.push(sportInsight);
         } catch (e) {
           console.warn("Sports Insight Failed:", e);
         }
@@ -181,10 +195,12 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           const marketInsight = await cachedFetch(
             `insight_market_v5_${symbol}`,
             async () => {
-              // Using corsproxy.io for market insights to avoid cors/403 issues
-              const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+              // Using allorigins to avoid 403 Forbidden on Yahoo Finance
+              const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+              const url = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
               const res = await fetch(url);
-              return res.ok ? await res.json() : null;
+              const json = await res.json();
+              return json.contents ? JSON.parse(json.contents) : null;
             },
             EXPIRY_TIMES.MARKET
           );

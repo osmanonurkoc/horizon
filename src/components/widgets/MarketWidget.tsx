@@ -23,24 +23,22 @@ interface HistoricalData {
 }
 
 /**
- * Robust fetcher that uses corsproxy.io for Yahoo Finance.
- * Prevents "Unexpected token <" by checking content types.
+ * Robust fetcher that uses api.allorigins.win/get for Yahoo Finance.
+ * Bypasses 403 Forbidden by parsing the stringified .contents property.
  */
 async function fetchYahooProxy(targetUrl: string) {
-  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 
   try {
     const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error(`Proxy status ${res.status}`);
 
-    const contentType = res.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      throw new Error("Invalid content type received from proxy");
-    }
-
     const json = await res.json();
-    if (json && !json.error) return json;
-    throw new Error(json?.error?.description || "Market API Error");
+    if (!json.contents) throw new Error("Proxy response empty");
+
+    const data = JSON.parse(json.contents);
+    if (data && !data.error) return data;
+    throw new Error(data?.error?.description || "Market API Error");
   } catch (e) {
     console.warn("Market Proxy Failed:", e);
     throw new Error("Market Hub Connectivity Interrupted");
