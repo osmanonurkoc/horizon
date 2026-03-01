@@ -12,7 +12,8 @@ const EASTER_EGGS = [
   "Don't forget your lean muscle workout today! Stay slim and strong.",
   "Another perfect day for open-source contributions.",
   "Ready to design some fresh UI themes?",
-  "Boot up the pen display, it's time to draw."
+  "Boot up the pen display, it's time to draw.",
+  "Welcome back. Your dashboard is ready."
 ];
 
 export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfig, refreshKey?: number }) {

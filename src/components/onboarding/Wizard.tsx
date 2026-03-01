@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,27 +12,17 @@ import {
   Download, Upload, ChevronUp, ChevronDown, Monitor
 } from "lucide-react";
 import { 
-  type DiscoverConfig, saveConfig, DEFAULT_CONFIG, getConfig, SEARCH_ENGINES, type SportsTeam 
+  type DiscoverConfig, saveConfig, DEFAULT_CONFIG, getConfig, SEARCH_ENGINES
 } from "@/lib/config-store";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AutocompletePillInput } from "@/components/ui/autocomplete-pill-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-interface WizardProps {
-  onComplete: (config: DiscoverConfig) => void;
-}
-
-export default function Wizard({ onComplete }: WizardProps) {
+export default function Wizard({ onComplete }: { onComplete: (config: DiscoverConfig) => void }) {
   const [step, setStep] = useState(1);
   const [config, setConfig] = useState<DiscoverConfig>(DEFAULT_CONFIG);
   const [tempBookmark, setTempBookmark] = useState({ name: '', url: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [locationResults, setLocationResults] = useState<string[]>([]);
-  const [stockResults, setStockResults] = useState<string[]>([]);
-  const [sportsResults, setSportsResults] = useState<SportsTeam[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const stored = getConfig();
@@ -58,73 +48,6 @@ export default function Wizard({ onComplete }: WizardProps) {
     }
     setConfig(prev => ({ ...prev, widgetOrder: newOrder }));
   };
-
-  const fetchLocations = useCallback((q: string) => {
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!q || q.length < 2) return;
-    searchTimeout.current = setTimeout(async () => {
-      if (!config.apiKeys.weather) return;
-      setIsSearching(true);
-      try {
-        const url = `https://corsproxy.io/?https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (Array.isArray(data)) setLocationResults(data.map((l: any) => `${l.name}, ${l.country}`));
-      } catch (e) {
-        console.warn("Location fetch error:", e);
-      } finally { setIsSearching(false); }
-    }, 300);
-  }, [config.apiKeys.weather]);
-
-  const fetchStocks = useCallback((q: string) => {
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!q || q.length < 1) return;
-    searchTimeout.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data?.quotes) setStockResults(data.quotes.map((m: any) => `${m.symbol} (${m.shortname || m.longname || m.symbol})`));
-      } catch (e) {
-        console.warn("Stock fetch error:", e);
-      } finally { setIsSearching(false); }
-    }, 300);
-  }, []);
-
-  const fetchSports = useCallback((q: string) => {
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    const sanitizedQ = q.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-    if (!sanitizedQ || sanitizedQ.length < 2) return;
-    
-    searchTimeout.current = setTimeout(async () => {
-      if (!config.apiKeys.sports) return;
-
-      setIsSearching(true);
-      try {
-        const url = `https://corsproxy.io/?https://v3.football.api-sports.io/teams?search=${encodeURIComponent(sanitizedQ)}`;
-        const res = await fetch(url, {
-          headers: { "x-apisports-key": config.apiKeys.sports }
-        });
-        const data = await res.json();
-        
-        if (data.errors && Object.keys(data.errors).length > 0) {
-          console.warn("API-Football Search Error:", Object.values(data.errors)[0]);
-          return;
-        }
-
-        if (data?.response) {
-          setSportsResults(data.response.map((r: any) => ({
-            id: r.team.id,
-            name: r.team.name,
-            logo: r.team.logo
-          })));
-        }
-      } catch (e: any) {
-        console.warn("Sports search failed:", e);
-      } finally { setIsSearching(false); }
-    }, 500);
-  }, [config.apiKeys.sports]);
 
   const finish = () => {
     saveConfig(config);
@@ -315,12 +238,10 @@ export default function Wizard({ onComplete }: WizardProps) {
                 <div className="space-y-4">
                   <Label className="text-base font-semibold">Base Location (Real-time)</Label>
                   <AutocompletePillInput 
-                    options={locationResults}
+                    searchType="location"
                     values={config.location ? [config.location] : []}
-                    onSearch={fetchLocations}
-                    isLoading={isSearching}
                     onChange={(vals) => setConfig(c => ({ ...c, location: vals[0] || "" }))}
-                    placeholder={config.apiKeys.weather ? "Search cities..." : "Add Weather API Key first"}
+                    placeholder="Search cities..."
                     isMulti={false}
                   />
                 </div>
@@ -330,18 +251,11 @@ export default function Wizard({ onComplete }: WizardProps) {
                 <div className="space-y-4">
                   <Label className="text-base font-semibold">Sports Teams (API-Football)</Label>
                   <AutocompletePillInput 
-                    options={sportsResults.map(t => t.name)}
-                    values={config.sportsTeams.map(t => t.name)}
-                    onSearch={fetchSports}
-                    isLoading={isSearching}
-                    onChange={(vals) => {
-                      const selectedNames = vals;
-                      const newTeams = sportsResults.filter(t => selectedNames.includes(t.name));
-                      const existingTeams = config.sportsTeams.filter(t => selectedNames.includes(t.name));
-                      const combined = Array.from(new Map([...existingTeams, ...newTeams].map(t => [t.id, t])).values());
-                      setConfig(c => ({ ...c, sportsTeams: combined }));
-                    }}
-                    placeholder={config.apiKeys.sports ? "Search teams..." : "Add Sports API Key first"}
+                    searchType="sport"
+                    apiKey={config.apiKeys.sports}
+                    values={config.sportsTeams}
+                    onChange={(vals) => setConfig(c => ({ ...c, sportsTeams: vals }))}
+                    placeholder="Search teams (e.g. Real Madrid, Arsenal)..."
                   />
                 </div>
               )}
@@ -350,13 +264,33 @@ export default function Wizard({ onComplete }: WizardProps) {
                 <div className="space-y-4">
                   <Label className="text-base font-semibold">Market Tickers (Global)</Label>
                   <AutocompletePillInput 
-                    options={stockResults}
+                    searchType="stock"
                     values={config.stocks}
-                    onSearch={fetchStocks}
-                    isLoading={isSearching}
                     onChange={(vals) => setConfig(c => ({ ...c, stocks: vals }))}
-                    placeholder="Search tickers (e.g. AAPL, THYAO.IS)..."
+                    placeholder="Search tickers (e.g. AAPL, BTC-USD)..."
                   />
+                </div>
+              )}
+
+              {config.enabledWidgets.newsFeed && (
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">News Topics & Languages</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <AutocompletePillInput 
+                      searchType="static"
+                      staticOptions={['Technology', 'Science', 'Business', 'Sports', 'Health', 'Entertainment']}
+                      values={config.newsTopics}
+                      onChange={(vals) => setConfig(c => ({ ...c, newsTopics: vals }))}
+                      placeholder="Add topics..."
+                    />
+                    <AutocompletePillInput 
+                      searchType="static"
+                      staticOptions={['en', 'es', 'fr', 'de', 'it', 'tr']}
+                      values={config.newsLanguages}
+                      onChange={(vals) => setConfig(c => ({ ...c, newsLanguages: vals }))}
+                      placeholder="Add languages..."
+                    />
+                  </div>
                 </div>
               )}
 

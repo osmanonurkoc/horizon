@@ -32,7 +32,6 @@ async function fetchTeamFixtures(teamId: number, apiKey: string) {
   const year = new Date().getFullYear();
   const season = month < 7 ? year - 1 : year;
 
-  // Use corsproxy.io to bypass strict browser CORS issues
   const targetUrl = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
   const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
   
@@ -109,7 +108,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 2. Sports Insight (API-Football) - Strict User Teams Only
+      // 2. Sports Insight
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
@@ -119,7 +118,6 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             const fixtures = await fetchTeamFixtures(team.id, config.apiKeys.sports);
             if (!fixtures || fixtures.length === 0) continue;
 
-            // Check for LIVE
             const liveMatch = fixtures.find((f: any) => 
               ['1H', '2H', 'HT', 'ET', 'P', 'BT'].includes(f.fixture.status.short)
             );
@@ -136,7 +134,6 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               break;
             }
 
-            // Check for NEXT
             const nextMatch = fixtures
               .filter((f: any) => f.fixture.timestamp > now && f.fixture.status.short === 'NS')
               .sort((a: any, b: any) => a.fixture.timestamp - b.fixture.timestamp)[0];
