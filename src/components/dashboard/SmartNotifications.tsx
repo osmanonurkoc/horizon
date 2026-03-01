@@ -15,9 +15,9 @@ interface Insight {
   isLive?: boolean;
 }
 
-// Client-side sports fetcher for notifications
+// Client-side sports fetcher for notifications with CORS proxy
 async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
-  const cacheKey = `sports_insight_v1_${teamId}`;
+  const cacheKey = `sports_insight_v2_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
@@ -33,15 +33,37 @@ async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
   const season = month < 7 ? year - 1 : year;
 
   try {
-    const url = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+    // Using corsproxy.io to avoid preflight issues in Studio
+    const url = `https://corsproxy.io/?https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
     const res = await fetch(url, {
-      headers: { "x-apisports-key": apiKey, "Accept": "application/json" }
+      headers: { 
+        "x-apisports-key": apiKey, 
+        "Accept": "application/json" 
+      }
     });
     const data = await res.json();
+    
+    // Self-healing fallback for free tier season restrictions
+    if (data.errors && Object.values(data.errors)[0]?.toString().includes("try from")) {
+      const errorStr = Object.values(data.errors)[0] as string;
+      const match = errorStr.match(/to (\d{4})/);
+      const fallbackSeason = match ? match[1] : '2024';
+      
+      const fallbackUrl = `https://corsproxy.io/?https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${fallbackSeason}`;
+      const fallbackRes = await fetch(fallbackUrl, {
+        headers: { "x-apisports-key": apiKey, "Accept": "application/json" }
+      });
+      const fallbackData = await fallbackRes.json();
+      const response = fallbackData.response || [];
+      localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
+      return response;
+    }
+
     const response = data.response || [];
     localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
     return response;
   } catch (e) {
+    console.warn("Sports Fetch Insight Failed:", e);
     return [];
   }
 }
@@ -59,7 +81,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       if (config.enabledWidgets.weather && config.location && config.apiKeys.weather) {
         try {
           const forecast = await cachedFetch(
-            `insight_weather_v2_${config.location}`,
+            `insight_weather_v3_${config.location}`,
             async () => {
               const url = `https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
               const res = await fetch(url);
@@ -101,13 +123,12 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
+          const now = Math.floor(Date.now() / 1000);
           
           for (const team of config.sportsTeams) {
             const fixtures = await fetchSportsInsightsClient(team.id, config.apiKeys.sports);
             if (!fixtures || fixtures.length === 0) continue;
 
-            const now = Math.floor(Date.now() / 1000);
-            
             // Check for Live
             const liveMatch = fixtures.find((f: any) => 
               ['1H', '2H', 'HT', 'ET', 'P', 'BT'].includes(f.fixture.status.short)
@@ -153,8 +174,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         try {
           const symbol = config.stocks[0].split(' ')[0];
           const marketInsight = await cachedFetch(
-            `insight_market_v3_${symbol}`,
+            `insight_market_v4_${symbol}`,
             async () => {
+              // Using allorigins proxy for market insights to avoid cors issues
               const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`)}`;
               const res = await fetch(url);
               return res.ok ? await res.json() : null;
