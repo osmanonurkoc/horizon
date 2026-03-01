@@ -17,7 +17,7 @@ interface TeamResult {
   date: string;
 }
 
-const SPORTS_CACHE_EXPIRY = 10 * 60 * 1000; // 10 minutes to respect 100 req/day limit
+const SPORTS_CACHE_EXPIRY = 10 * 60 * 1000; // 10 minutes
 
 export function SportsWidget({ config }: { config: DiscoverConfig }) {
   const [results, setResults] = useState<TeamResult[]>([]);
@@ -36,39 +36,46 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
       const teamResults = await Promise.all(
         config.sportsTeams.map(async (teamName) => {
           return cachedFetch(
-            `sports_v20_${teamName.replace(/\s+/g, '_')}`,
+            `sports_v21_${teamName.replace(/\s+/g, '_')}`,
             async () => {
-              // 1. Search Team
-              const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
-                headers: { "x-apisports-key": config.apiKeys.sports }
-              });
-              const searchJson = await searchRes.json();
-              const teamId = searchJson.response?.[0]?.team?.id;
+              try {
+                // 1. Search Team
+                const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
+                  headers: { "x-apisports-key": config.apiKeys.sports }
+                });
+                if (!searchRes.ok) return null;
+                const searchJson = await searchRes.json();
+                const teamId = searchJson.response?.[0]?.team?.id;
 
-              if (!teamId) return null;
+                if (!teamId) return null;
 
-              // 2. Get Last 5 Fixtures
-              const fixturesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&last=5`, {
-                headers: { "x-apisports-key": config.apiKeys.sports }
-              });
-              const fixturesJson = await fixturesRes.json();
-              
-              if (!fixturesJson.response || fixturesJson.response.length === 0) return null;
-              
-              const lastMatch = fixturesJson.response[0];
-              const isHome = lastMatch.teams.home.id === teamId;
-              const opponent = isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name;
-              const score = `${lastMatch.goals.home} - ${lastMatch.goals.away}`;
-              const status = lastMatch.fixture.status.short;
+                // 2. Get Last 5 Fixtures
+                const fixturesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&last=5`, {
+                  headers: { "x-apisports-key": config.apiKeys.sports }
+                });
+                if (!fixturesRes.ok) return null;
+                const fixturesJson = await fixturesRes.ok ? await fixturesRes.json() : null;
+                
+                if (!fixturesJson?.response || fixturesJson.response.length === 0) return null;
+                
+                const lastMatch = fixturesJson.response[0];
+                const isHome = lastMatch.teams.home.id === teamId;
+                const opponent = isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name;
+                const score = `${lastMatch.goals.home} - ${lastMatch.goals.away}`;
+                const status = lastMatch.fixture.status.short;
 
-              return {
-                teamName: lastMatch.teams.home.id === teamId ? lastMatch.teams.home.name : lastMatch.teams.away.name,
-                lastScore: score,
-                opponent: opponent,
-                isLive: status !== 'FT' && status !== 'NS' && status !== 'CANC',
-                status: status,
-                date: new Date(lastMatch.fixture.date).toLocaleDateString()
-              } as TeamResult;
+                return {
+                  teamName: isHome ? lastMatch.teams.home.name : lastMatch.teams.away.name,
+                  lastScore: score,
+                  opponent: opponent,
+                  isLive: status !== 'FT' && status !== 'NS' && status !== 'CANC',
+                  status: status,
+                  date: new Date(lastMatch.fixture.date).toLocaleDateString()
+                } as TeamResult;
+              } catch (e) {
+                console.warn(`Sports fetch error for ${teamName}:`, e);
+                return null;
+              }
             },
             SPORTS_CACHE_EXPIRY
           );
@@ -77,7 +84,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
 
       setResults(teamResults.filter((r): r is TeamResult => r !== null));
     } catch (err: any) {
-      setError("Stadium link offline.");
+      setError("Sports Link Interrupted.");
     } finally {
       setLoading(false);
     }

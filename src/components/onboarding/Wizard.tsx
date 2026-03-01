@@ -90,6 +90,8 @@ export default function Wizard({ onComplete }: WizardProps) {
       try {
         const data = await robustProxyFetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`);
         if (Array.isArray(data)) setLocationResults(data.map((l: any) => `${l.name}, ${l.country}`));
+      } catch (e) {
+        console.warn("Location fetch error:", e);
       } finally { setIsSearching(false); }
     }, 300);
   }, [config.apiKeys.weather]);
@@ -102,6 +104,8 @@ export default function Wizard({ onComplete }: WizardProps) {
       try {
         const data = await robustProxyFetch(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`);
         if (data?.quotes) setStockResults(data.quotes.map((m: any) => `${m.symbol} (${m.shortname || m.longname || m.symbol})`));
+      } catch (e) {
+        console.warn("Stock fetch error:", e);
       } finally { setIsSearching(false); }
     }, 300);
   }, []);
@@ -117,10 +121,10 @@ export default function Wizard({ onComplete }: WizardProps) {
       }
       setIsSearching(true);
       try {
-        // Direct fetch for API-Football as it handles CORS well and needs headers
         const res = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(q)}`, {
           headers: { "x-apisports-key": config.apiKeys.sports }
         });
+        if (!res.ok) throw new Error("API Response Error");
         const data = await res.json();
         if (data?.response && Array.isArray(data.response)) {
           setSportsResults(data.response.map((r: any) => r.team.name));
@@ -128,10 +132,10 @@ export default function Wizard({ onComplete }: WizardProps) {
           setSportsResults([]);
         }
       } catch (e) {
-        console.error("Sports search failed:", e);
-        setSportsResults([]);
+        console.warn("Sports search failed:", e);
+        setSportsResults(["Connectivity issue. Check API key."]);
       } finally { setIsSearching(false); }
-    }, 500); // 500ms debounce to protect rate limits
+    }, 500);
   }, [config.apiKeys.sports]);
 
   const finish = () => {

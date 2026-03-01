@@ -15,25 +15,6 @@ interface Insight {
   isLive?: boolean;
 }
 
-async function robustProxyFetch(targetUrl: string, options: RequestInit = {}) {
-  const encodedUrl = encodeURIComponent(targetUrl);
-  const proxies = [
-    `https://api.allorigins.win/raw?url=${encodedUrl}`,
-    `https://corsproxy.io/?${encodedUrl}`
-  ];
-
-  for (const proxyUrl of proxies) {
-    try {
-      const res = await fetch(proxyUrl, options);
-      if (!res.ok) continue;
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) continue;
-      return await res.json();
-    } catch (e) {}
-  }
-  return null;
-}
-
 export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +24,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       setLoading(true);
       const newInsights: Insight[] = [];
 
-      // 1. Weather Event
+      // 1. Weather Event Insight
       if (config.enabledWidgets.weather && config.location && config.apiKeys.weather) {
         try {
           const forecast = await cachedFetch(
@@ -57,7 +38,11 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           );
 
           if (forecast?.list) {
-            const rainItem = forecast.list.find((item: any) => item.weather[0].main.toLowerCase().includes('rain'));
+            const rainItem = forecast.list.find((item: any) => 
+              item.weather[0].main.toLowerCase().includes('rain') || 
+              item.weather[0].description.toLowerCase().includes('rain')
+            );
+            
             if (rainItem) {
               const rainTime = new Date(rainItem.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               newInsights.push({
@@ -77,61 +62,75 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               });
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn("Weather Insight Failed:", e);
+        }
       }
 
-      // 2. Sports Insight (API-Football) - Strict priority: Live -> Next
+      // 2. Sports Insight (API-Football) - Strict User Teams Only
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
           
           for (const teamName of config.sportsTeams) {
-            // Step 1: Search Team to get ID
-            const searchData = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
-              headers: { "x-apisports-key": config.apiKeys.sports }
-            }).then(res => res.json());
-            const teamId = searchData?.response?.[0]?.team?.id;
-
-            if (teamId) {
-              // Step 2: Check for LIVE match
-              const liveData = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&live=all`, {
+            try {
+              // Step 1: Search Team to get ID
+              const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
                 headers: { "x-apisports-key": config.apiKeys.sports }
-              }).then(res => res.json());
-              
-              if (liveData?.response?.length > 0) {
-                const match = liveData.response[0];
-                sportInsight = {
-                  type: 'sports',
-                  title: 'LIVE SCORE',
-                  message: `${match.teams.home.name} ${match.goals.home} - ${match.goals.away} ${match.teams.away.name} (${match.fixture.status.elapsed}')`,
-                  icon: Trophy,
-                  color: 'red',
-                  isLive: true
-                };
-                break; // Live takes priority, stop searching
-              }
+              });
+              if (!searchRes.ok) continue;
+              const searchData = await searchRes.json();
+              const teamId = searchData?.response?.[0]?.team?.id;
 
-              // Step 3: Check for NEXT match if no live
-              if (!sportInsight) {
-                const nextData = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&next=1`, {
+              if (teamId) {
+                // Step 2: Check for LIVE match
+                const liveRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&live=all`, {
                   headers: { "x-apisports-key": config.apiKeys.sports }
-                }).then(res => res.json());
-                if (nextData?.response?.length > 0) {
-                  const match = nextData.response[0];
-                  sportInsight = {
-                    type: 'sports',
-                    title: 'Next Match',
-                    message: `${match.teams.home.name} vs ${match.teams.away.name} on ${new Date(match.fixture.date).toLocaleDateString()}`,
-                    icon: Trophy,
-                    color: 'red'
-                  };
+                });
+                if (liveRes.ok) {
+                  const liveData = await liveRes.json();
+                  if (liveData?.response?.length > 0) {
+                    const match = liveData.response[0];
+                    sportInsight = {
+                      type: 'sports',
+                      title: 'LIVE SCORE',
+                      message: `${match.teams.home.name} ${match.goals.home} - ${match.goals.away} ${match.teams.away.name} (${match.fixture.status.elapsed}')`,
+                      icon: Trophy,
+                      color: 'red',
+                      isLive: true
+                    };
+                    break; // Live takes priority
+                  }
+                }
+
+                // Step 3: Check for NEXT match if no live
+                if (!sportInsight) {
+                  const nextRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&next=1`, {
+                    headers: { "x-apisports-key": config.apiKeys.sports }
+                  });
+                  if (nextRes.ok) {
+                    const nextData = await nextRes.json();
+                    if (nextData?.response?.length > 0) {
+                      const match = nextData.response[0];
+                      sportInsight = {
+                        type: 'sports',
+                        title: 'Next Match',
+                        message: `${match.teams.home.name} vs ${match.teams.away.name} on ${new Date(match.fixture.date).toLocaleDateString()}`,
+                        icon: Trophy,
+                        color: 'red'
+                      };
+                    }
+                  }
                 }
               }
+            } catch (teamError) {
+              console.warn(`Failed to fetch sports data for ${teamName}:`, teamError);
+              continue; // Try next team
             }
           }
           if (sportInsight) newInsights.push(sportInsight);
         } catch (e) {
-          console.error("Sports Insight Error:", e);
+          console.error("Global Sports Insight Error:", e);
         }
       }
 
@@ -154,7 +153,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           if (meta) {
             const price = meta.regularMarketPrice;
             const prev = meta.chartPreviousClose;
-            if (price && prev) {
+            if (price !== undefined && prev !== undefined) {
               const diff = ((price - prev) / prev) * 100;
               newInsights.push({
                 type: 'market',
@@ -165,7 +164,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               });
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn("Market Insight Failed:", e);
+        }
       }
 
       setInsights(newInsights);
