@@ -16,13 +16,18 @@ interface TeamResult {
   date: string;
 }
 
-// Client-side fetcher for sports widget - USES SERVER PROXY
+/**
+ * Client-side fetcher for sports widget - USES UNIFIED SERVER PROXY
+ * Ensures stability and navigates CORS/Season restrictions.
+ * Uses unified cache key shared with SmartNotifications.
+ */
 async function getFixturesClient(teamId: number, apiKey: string) {
-  const cacheKey = `sports_fixtures_v4_${teamId}`;
+  const cacheKey = `sports_data_v5_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
       const { data, timestamp } = JSON.parse(cached);
+      // Cache for 5 minutes
       if (Date.now() - timestamp < 300000) return data; 
     } catch (e) {
       localStorage.removeItem(cacheKey);
@@ -34,7 +39,6 @@ async function getFixturesClient(teamId: number, apiKey: string) {
   const season = month < 7 ? year - 1 : year;
 
   try {
-    // Fetch via our server-side proxy
     const url = `/api/sports?team=${teamId}&season=${season}`;
     let res = await fetch(url, {
       method: 'GET',
@@ -90,50 +94,53 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     setLoading(true);
     setError(null);
     try {
-      const teamResults = await Promise.all(
-        config.sportsTeams.map(async (team) => {
-          const fixtures = await getFixturesClient(team.id, config.apiKeys.sports);
-          if (!fixtures || fixtures.length === 0) return null;
-
+      const teamResults: TeamResult[] = [];
+      
+      // PRODUCTION FIX: Use sequential loop with delay to avoid rate limit bursts (10 req/min)
+      for (const team of config.sportsTeams) {
+        const fixtures = await getFixturesClient(team.id, config.apiKeys.sports);
+        if (fixtures && fixtures.length > 0) {
           const liveMatch = fixtures.find((f: any) => 
-            ['1H', '2H', 'HT', 'ET', 'P', 'BT'].includes(f.fixture.status.short)
+            ['1H', '2H', 'HT', 'ET', 'P', 'BT', 'LIVE'].includes(f.fixture.status.short)
           );
 
           if (liveMatch) {
             const isHome = liveMatch.teams.home.id === team.id;
-            return {
+            teamResults.push({
               teamName: team.name,
               lastScore: `${liveMatch.goals.home} - ${liveMatch.goals.away}`,
               opponent: isHome ? liveMatch.teams.away.name : liveMatch.teams.home.name,
               isLive: true,
               status: liveMatch.fixture.status.elapsed + "'",
               date: new Date(liveMatch.fixture.date).toLocaleDateString()
-            };
+            });
+          } else {
+            const finishedMatches = fixtures
+              .filter((f: any) => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short))
+              .sort((a: any, b: any) => b.fixture.timestamp - a.fixture.timestamp);
+
+            if (finishedMatches.length > 0) {
+              const lastMatch = finishedMatches[0];
+              const isHome = lastMatch.teams.home.id === team.id;
+              teamResults.push({
+                teamName: team.name,
+                lastScore: `${lastMatch.goals.home} - ${lastMatch.goals.away}`,
+                opponent: isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name,
+                isLive: false,
+                status: 'FT',
+                date: new Date(lastMatch.fixture.date).toLocaleDateString()
+              });
+            }
           }
+        }
+        
+        // Add 1s delay if fetching multiple teams to protect rate limits
+        if (config.sportsTeams.length > 1) {
+          await new Promise(res => setTimeout(res, 1000));
+        }
+      }
 
-          const finishedMatches = fixtures
-            .filter((f: any) => f.fixture.status.short === 'FT' || f.fixture.status.short === 'AET' || f.fixture.status.short === 'PEN')
-            .sort((a: any, b: any) => b.fixture.timestamp - a.fixture.timestamp);
-
-          if (finishedMatches.length > 0) {
-            const lastMatch = finishedMatches[0];
-            const isHome = lastMatch.teams.home.id === team.id;
-            return {
-              teamName: team.name,
-              lastScore: `${lastMatch.goals.home} - ${lastMatch.goals.away}`,
-              opponent: isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name,
-              isLive: false,
-              status: 'FT',
-              date: new Date(lastMatch.fixture.date).toLocaleDateString()
-            };
-          }
-
-          return null;
-        })
-      );
-
-      const validResults = teamResults.filter((r): r is TeamResult => r !== null);
-      setResults(validResults);
+      setResults(teamResults);
     } catch (err: any) {
       setError(`Stadium Link Interrupted: ${err.message}`);
     } finally {
@@ -218,7 +225,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
           <div className="p-6 bg-secondary/5 rounded-3xl border border-secondary/10 space-y-4">
             <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4 text-secondary" /> Network Status</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Global stadium data is cached for 5 minutes. Live indicators automatically activate during match time.
+              Global stadium data is cached for 5 minutes. Sequential updates protect the Stadium Network from congestion.
             </p>
           </div>
           <div className="space-y-3">

@@ -23,24 +23,17 @@ interface HistoricalData {
 }
 
 /**
- * Robust fetcher that uses api.allorigins.win/get for Yahoo Finance.
- * Bypasses 403 Forbidden by parsing the stringified .contents property.
+ * Uses our native server proxy to fetch market data.
  */
-async function fetchYahooProxy(targetUrl: string) {
-  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-
+async function fetchYahooLocalProxy(symbol: string, range: string = '1d') {
   try {
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error(`Proxy status ${res.status}`);
-
-    const json = await res.json();
-    if (!json.contents) throw new Error("Proxy response empty");
-
-    const data = JSON.parse(json.contents);
-    if (data && !data.error) return data;
-    throw new Error(data?.error?.description || "Market API Error");
-  } catch (e) {
-    console.warn("Market Proxy Failed:", e);
+    const res = await fetch(`/api/yahoo?symbol=${encodeURIComponent(symbol)}&range=${range}`);
+    if (!res.ok) throw new Error(`Status ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data;
+  } catch (e: any) {
+    console.warn("Market Proxy Failed:", e.message);
     throw new Error("Market Hub Connectivity Interrupted");
   }
 }
@@ -80,11 +73,9 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         tickerList.map(async (symbol) => {
           try {
             return await cachedFetch(
-              `yahoo_v16_quote_${symbol}`,
+              `yahoo_v17_quote_${symbol}`,
               async () => {
-                const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-                const json = await fetchYahooProxy(targetUrl);
-                
+                const json = await fetchYahooLocalProxy(symbol, '1d');
                 const meta = json.chart?.result?.[0]?.meta;
                 if (!meta) return null;
 
@@ -134,11 +125,9 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     
     try {
       const data = await cachedFetch(
-        `yahoo_v16_hist_${selectedSymbol}`,
+        `yahoo_v17_hist_${selectedSymbol}`,
         async () => {
-          const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1mo`;
-          const json = await fetchYahooProxy(targetUrl);
-          
+          const json = await fetchYahooLocalProxy(selectedSymbol, '1mo');
           const result = json.chart?.result?.[0];
           if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) {
             throw new Error("No trend signals found.");
@@ -336,7 +325,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
                     </>
                   )}
                   <p className="text-xs text-muted-foreground mt-4 max-w-sm">
-                    Global Market Stream via Yahoo Finance Network.
+                    Global Market Stream via native local proxy.
                   </p>
                 </div>
               )}
@@ -351,7 +340,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
               </div>
               <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10">
                 <p className="text-[10px] font-black uppercase text-secondary mb-1 tracking-widest">Network</p>
-                <p className="font-bold text-foreground/90 text-sm">Yahoo Finance Proxy</p>
+                <p className="font-bold text-foreground/90 text-sm">Native local proxy</p>
               </div>
             </div>
           </div>

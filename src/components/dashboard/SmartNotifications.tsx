@@ -16,15 +16,17 @@ interface Insight {
 }
 
 /**
- * Client-side fetcher for notifications - USES SERVER PROXY
+ * Client-side fetcher for notifications - USES UNIFIED SERVER PROXY
  * Ensures stability and navigates CORS/Season restrictions.
+ * Uses unified cache key shared with SportsWidget.
  */
 async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
-  const cacheKey = `sports_insight_v4_${teamId}`;
+  const cacheKey = `sports_data_v5_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
       const { data, timestamp } = JSON.parse(cached);
+      // Cache for 5 minutes
       if (Date.now() - timestamp < 300000) return data;
     } catch (e) {
       localStorage.removeItem(cacheKey);
@@ -36,7 +38,7 @@ async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
     const year = new Date().getFullYear();
     const season = month < 7 ? year - 1 : year;
 
-    // Fetch via our server-side proxy
+    // Fetch via our local server-side proxy
     const url = `/api/sports?team=${teamId}&season=${season}`;
     const res = await fetch(url, {
       headers: { 
@@ -84,7 +86,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       if (config.enabledWidgets.weather && config.location && config.apiKeys.weather) {
         try {
           const forecast = await cachedFetch(
-            `insight_weather_v4_${config.location}`,
+            `insight_weather_v5_${config.location}`,
             async () => {
               const url = `https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
               const res = await fetch(url);
@@ -128,30 +130,26 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           const now = Math.floor(Date.now() / 1000);
           let allFixtures: any[] = [];
 
-          const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-
-          // Aggregate all fixtures for every tracked team first
+          // Sequential fetch with 1s delay to protect rate limits (10req/min)
           for (const team of config.sportsTeams) {
             const fixtures = await fetchSportsInsightsClient(team.id, config.apiKeys.sports);
             if (fixtures && fixtures.length > 0) {
               allFixtures = [...allFixtures, ...fixtures];
             }
-            // Rate limit protection: 1 second delay between team fetches
-            await delay(1000);
+            if (config.sportsTeams.length > 1) {
+              await new Promise(res => setTimeout(res, 1000));
+            }
           }
 
           if (allFixtures.length > 0) {
-            // Priority 1: Check if ANY team is currently playing
             const liveMatch = allFixtures.find(f => 
               ['1H', '2H', 'HT', 'ET', 'P', 'BT', 'LIVE'].includes(f.fixture.status.short)
             );
 
-            // Priority 2: Check for the closest NEXT match among all teams
             const nextMatch = allFixtures
               .filter(f => f.fixture.timestamp > now && ['NS', 'TBD'].includes(f.fixture.status.short))
               .sort((a, b) => a.fixture.timestamp - b.fixture.timestamp)[0];
               
-            // Priority 3: Fallback to the absolute LATEST finished match
             const lastMatch = allFixtures
               .filter(f => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short))
               .sort((a, b) => b.fixture.timestamp - a.fixture.timestamp)[0];
@@ -193,19 +191,15 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 3. Market Insight
+      // 3. Market Insight - USES NATIVE SERVER PROXY
       if (config.enabledWidgets.market && config.stocks.length > 0) {
         try {
           const symbol = config.stocks[0].split(' ')[0];
           const marketInsight = await cachedFetch(
-            `insight_market_v5_${symbol}`,
+            `insight_market_v7_${symbol}`,
             async () => {
-              // Using allorigins string parsing to bypass 403 blocks
-              const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-              const url = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-              const res = await fetch(url);
-              const json = await res.json();
-              return json.contents ? JSON.parse(json.contents) : null;
+              const res = await fetch(`/api/yahoo?symbol=${encodeURIComponent(symbol)}`);
+              return res.ok ? await res.json() : null;
             },
             EXPIRY_TIMES.MARKET
           );
