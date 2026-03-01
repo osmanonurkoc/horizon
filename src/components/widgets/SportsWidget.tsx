@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, ArrowRight, ShieldCheck, Loader2, AlertCircle, History, Timer } from "lucide-react";
+import { Trophy, ArrowRight, AlertCircle, History, Loader2 } from "lucide-react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -16,9 +16,9 @@ interface TeamResult {
   date: string;
 }
 
-// Client-side fetcher for sports widget - DIRECT FETCH (No Proxy)
+// Client-side fetcher for sports widget - USES SERVER PROXY
 async function getFixturesClient(teamId: number, apiKey: string) {
-  const cacheKey = `sports_fixtures_v3_${teamId}`;
+  const cacheKey = `sports_fixtures_v4_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
@@ -34,8 +34,8 @@ async function getFixturesClient(teamId: number, apiKey: string) {
   const season = month < 7 ? year - 1 : year;
 
   try {
-    // API-Football supports CORS. Calling direct to resolve preflight failures.
-    const url = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+    // Fetch via our server-side proxy
+    const url = `/api/sports?team=${teamId}&season=${season}`;
     let res = await fetch(url, {
       method: 'GET',
       headers: {
@@ -52,7 +52,7 @@ async function getFixturesClient(teamId: number, apiKey: string) {
       const match = errorStr.match(/to (\d{4})/);
       const fallbackSeason = match ? match[1] : '2024';
       
-      const newUrl = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${fallbackSeason}`;
+      const newUrl = `/api/sports?team=${teamId}&season=${fallbackSeason}`;
       res = await fetch(newUrl, {
         method: 'GET',
         headers: {

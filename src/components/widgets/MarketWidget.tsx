@@ -23,35 +23,28 @@ interface HistoricalData {
 }
 
 /**
- * Robust fetcher that tries multiple proxies for Yahoo Finance.
+ * Robust fetcher that uses corsproxy.io for Yahoo Finance.
  * Prevents "Unexpected token <" by checking content types.
  */
 async function fetchYahooProxy(targetUrl: string) {
-  const encodedUrl = encodeURIComponent(targetUrl);
-  const proxies = [
-    `https://api.allorigins.win/raw?url=${encodedUrl}`,
-    `https://corsproxy.io/?${encodedUrl}`
-  ];
+  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
-  for (const proxyUrl of proxies) {
-    try {
-      const res = await fetch(proxyUrl);
-      if (!res.ok) continue;
+  try {
+    const res = await fetch(proxyUrl);
+    if (!res.ok) throw new Error(`Proxy status ${res.status}`);
 
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        console.warn(`Proxy ${proxyUrl} returned non-JSON content. Skipping...`);
-        continue;
-      }
-
-      const json = await res.json();
-      if (json && !json.error) return json;
-    } catch (e) {
-      console.warn(`Proxy ${proxyUrl} failed:`, e);
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("Invalid content type received from proxy");
     }
+
+    const json = await res.json();
+    if (json && !json.error) return json;
+    throw new Error(json?.error?.description || "Market API Error");
+  } catch (e) {
+    console.warn("Market Proxy Failed:", e);
+    throw new Error("Market Hub Connectivity Interrupted");
   }
-  
-  throw new Error("Market Hub Connectivity Lost (403/Forbidden)");
 }
 
 export function MarketWidget({ config }: { config: DiscoverConfig }) {
@@ -89,7 +82,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
         tickerList.map(async (symbol) => {
           try {
             return await cachedFetch(
-              `yahoo_v15_quote_${symbol}`,
+              `yahoo_v16_quote_${symbol}`,
               async () => {
                 const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
                 const json = await fetchYahooProxy(targetUrl);
@@ -119,7 +112,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
       
       const validStocks = quoteResults.filter((s): s is StockData => s !== null);
       if (validStocks.length === 0 && tickerList.length > 0) {
-        setError("Market Hub Access Denied (403). Try Refreshing.");
+        setError("Market Hub Access Interrupted. Try Refreshing.");
       } else {
         setStocks(validStocks);
       }
@@ -143,7 +136,7 @@ export function MarketWidget({ config }: { config: DiscoverConfig }) {
     
     try {
       const data = await cachedFetch(
-        `yahoo_v15_hist_${selectedSymbol}`,
+        `yahoo_v16_hist_${selectedSymbol}`,
         async () => {
           const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1mo`;
           const json = await fetchYahooProxy(targetUrl);

@@ -15,9 +15,9 @@ interface Insight {
   isLive?: boolean;
 }
 
-// Client-side sports fetcher for notifications - DIRECT FETCH (No Proxy)
+// Client-side fetcher for notifications - USES SERVER PROXY
 async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
-  const cacheKey = `sports_insight_v2_${teamId}`;
+  const cacheKey = `sports_insight_v3_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
@@ -33,8 +33,8 @@ async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
   const season = month < 7 ? year - 1 : year;
 
   try {
-    // API-Football supports CORS natively. Using direct URL to avoid proxy preflight issues.
-    const url = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+    // Fetch via our server-side proxy to bypass client CORS blocks
+    const url = `/api/sports?team=${teamId}&season=${season}`;
     const res = await fetch(url, {
       headers: { 
         "x-apisports-key": apiKey, 
@@ -49,7 +49,7 @@ async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
       const match = errorStr.match(/to (\d{4})/);
       const fallbackSeason = match ? match[1] : '2024';
       
-      const fallbackUrl = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${fallbackSeason}`;
+      const fallbackUrl = `/api/sports?team=${teamId}&season=${fallbackSeason}`;
       const fallbackRes = await fetch(fallbackUrl, {
         headers: { "x-apisports-key": apiKey, "Accept": "application/json" }
       });
@@ -81,7 +81,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       if (config.enabledWidgets.weather && config.location && config.apiKeys.weather) {
         try {
           const forecast = await cachedFetch(
-            `insight_weather_v3_${config.location}`,
+            `insight_weather_v4_${config.location}`,
             async () => {
               const url = `https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
               const res = await fetch(url);
@@ -125,8 +125,13 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           let sportInsight: Insight | null = null;
           const now = Math.floor(Date.now() / 1000);
           
+          const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+          
           for (const team of config.sportsTeams) {
             const fixtures = await fetchSportsInsightsClient(team.id, config.apiKeys.sports);
+            // Rate limit protection: 1 second delay between team fetches
+            await delay(1000);
+
             if (!fixtures || fixtures.length === 0) continue;
 
             // Check for Live
@@ -174,10 +179,10 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         try {
           const symbol = config.stocks[0].split(' ')[0];
           const marketInsight = await cachedFetch(
-            `insight_market_v4_${symbol}`,
+            `insight_market_v5_${symbol}`,
             async () => {
-              // Using allorigins proxy for market insights to avoid cors issues
-              const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`)}`;
+              // Using corsproxy.io for market insights to avoid cors/403 issues
+              const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
               const res = await fetch(url);
               return res.ok ? await res.json() : null;
             },
