@@ -109,16 +109,29 @@ export default function Wizard({ onComplete }: WizardProps) {
   const fetchSports = useCallback((q: string) => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!q || q.length < 2) return;
+    
     searchTimeout.current = setTimeout(async () => {
-      if (!config.apiKeys.sports) return;
+      if (!config.apiKeys.sports) {
+        setSportsResults(["Please enter your API-Football key above first."]);
+        return;
+      }
       setIsSearching(true);
       try {
-        const data = await robustProxyFetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(q)}`, {
+        // Direct fetch for API-Football as it handles CORS well and needs headers
+        const res = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(q)}`, {
           headers: { "x-apisports-key": config.apiKeys.sports }
         });
-        if (data?.response) setSportsResults(data.response.map((r: any) => r.team.name));
+        const data = await res.json();
+        if (data?.response && Array.isArray(data.response)) {
+          setSportsResults(data.response.map((r: any) => r.team.name));
+        } else {
+          setSportsResults([]);
+        }
+      } catch (e) {
+        console.error("Sports search failed:", e);
+        setSportsResults([]);
       } finally { setIsSearching(false); }
-    }, 300);
+    }, 500); // 500ms debounce to protect rate limits
   }, [config.apiKeys.sports]);
 
   const finish = () => {

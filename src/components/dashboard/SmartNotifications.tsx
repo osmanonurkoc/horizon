@@ -80,21 +80,23 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         } catch (e) {}
       }
 
-      // 2. Sports Insight (API-Football)
+      // 2. Sports Insight (API-Football) - Strict priority: Live -> Next
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
           
           for (const teamName of config.sportsTeams) {
-            const searchData = await robustProxyFetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
+            // Step 1: Search Team to get ID
+            const searchData = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
               headers: { "x-apisports-key": config.apiKeys.sports }
-            });
+            }).then(res => res.json());
             const teamId = searchData?.response?.[0]?.team?.id;
 
             if (teamId) {
-              const liveData = await robustProxyFetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&live=all`, {
+              // Step 2: Check for LIVE match
+              const liveData = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&live=all`, {
                 headers: { "x-apisports-key": config.apiKeys.sports }
-              });
+              }).then(res => res.json());
               
               if (liveData?.response?.length > 0) {
                 const match = liveData.response[0];
@@ -106,13 +108,14 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                   color: 'red',
                   isLive: true
                 };
-                break;
+                break; // Live takes priority, stop searching
               }
 
+              // Step 3: Check for NEXT match if no live
               if (!sportInsight) {
-                const nextData = await robustProxyFetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&next=1`, {
+                const nextData = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&next=1`, {
                   headers: { "x-apisports-key": config.apiKeys.sports }
-                });
+                }).then(res => res.json());
                 if (nextData?.response?.length > 0) {
                   const match = nextData.response[0];
                   sportInsight = {
@@ -127,7 +130,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             }
           }
           if (sportInsight) newInsights.push(sportInsight);
-        } catch (e) {}
+        } catch (e) {
+          console.error("Sports Insight Error:", e);
+        }
       }
 
       // 3. Market Insight
@@ -183,7 +188,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="w-full max-w-6xl mx-auto px-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 justify-center">
         {insights.map((insight, idx) => {
           const Icon = insight.icon;
           const colorClass = 

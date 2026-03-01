@@ -35,7 +35,6 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         const result = await generatePersonalizedBriefing(input);
         setBriefing(result);
       } catch (err) {
-        // Fallback for AI briefing error
         setBriefing("Dashboard synchronized. Modules are up to date and ready.");
       } finally {
         setIsLoading(false);
