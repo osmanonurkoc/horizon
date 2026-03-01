@@ -15,9 +15,12 @@ interface Insight {
   isLive?: boolean;
 }
 
-// Client-side fetcher for notifications - USES SERVER PROXY
+/**
+ * Client-side fetcher for notifications - USES SERVER PROXY
+ * Ensures stability and navigates CORS/Season restrictions.
+ */
 async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
-  const cacheKey = `sports_insight_v3_${teamId}`;
+  const cacheKey = `sports_insight_v4_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
@@ -28,12 +31,12 @@ async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
     }
   }
 
-  const month = new Date().getMonth();
-  const year = new Date().getFullYear();
-  const season = month < 7 ? year - 1 : year;
-
   try {
-    // Fetch via our server-side proxy to bypass client CORS blocks
+    const month = new Date().getMonth();
+    const year = new Date().getFullYear();
+    const season = month < 7 ? year - 1 : year;
+
+    // Fetch via our server-side proxy
     const url = `/api/sports?team=${teamId}&season=${season}`;
     const res = await fetch(url, {
       headers: { 
@@ -125,6 +128,8 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           const now = Math.floor(Date.now() / 1000);
           let allFixtures: any[] = [];
 
+          const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
           // Aggregate all fixtures for every tracked team first
           for (const team of config.sportsTeams) {
             const fixtures = await fetchSportsInsightsClient(team.id, config.apiKeys.sports);
@@ -132,7 +137,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               allFixtures = [...allFixtures, ...fixtures];
             }
             // Rate limit protection: 1 second delay between team fetches
-            await new Promise(res => setTimeout(res, 1000));
+            await delay(1000);
           }
 
           if (allFixtures.length > 0) {
@@ -195,7 +200,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           const marketInsight = await cachedFetch(
             `insight_market_v5_${symbol}`,
             async () => {
-              // Using allorigins to avoid 403 Forbidden on Yahoo Finance
+              // Using allorigins string parsing to bypass 403 blocks
               const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
               const url = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
               const res = await fetch(url);
