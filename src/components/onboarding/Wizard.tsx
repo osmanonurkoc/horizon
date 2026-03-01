@@ -25,9 +25,6 @@ interface WizardProps {
   onComplete: (config: DiscoverConfig) => void;
 }
 
-/**
- * Robust fetcher that tries multiple proxies to avoid CORS and HTML-instead-of-JSON errors.
- */
 async function robustProxyFetch(targetUrl: string) {
   const encodedUrl = encodeURIComponent(targetUrl);
   const proxies = [
@@ -39,17 +36,10 @@ async function robustProxyFetch(targetUrl: string) {
     try {
       const res = await fetch(proxyUrl);
       if (!res.ok) continue;
-
       const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        console.warn(`Proxy ${proxyUrl} returned non-JSON content. Skipping...`);
-        continue;
-      }
-
+      if (!contentType || !contentType.includes("application/json")) continue;
       return await res.json();
-    } catch (e) {
-      console.warn(`Proxy ${proxyUrl} failed:`, e);
-    }
+    } catch (e) {}
   }
   return null;
 }
@@ -94,63 +84,44 @@ export default function Wizard({ onComplete }: WizardProps) {
   const fetchLocations = useCallback((q: string) => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!q || q.length < 2) return;
-    
     searchTimeout.current = setTimeout(async () => {
       if (!config.apiKeys.weather) return;
       setIsSearching(true);
       try {
-        const targetUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`;
-        const data = await robustProxyFetch(targetUrl);
-        if (Array.isArray(data)) {
-          setLocationResults(data.map((l: any) => `${l.name}, ${l.country}`));
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsSearching(false);
-      }
+        const data = await robustProxyFetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`);
+        if (Array.isArray(data)) setLocationResults(data.map((l: any) => `${l.name}, ${l.country}`));
+      } finally { setIsSearching(false); }
     }, 300);
   }, [config.apiKeys.weather]);
 
   const fetchStocks = useCallback((q: string) => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!q || q.length < 1) return;
-
     searchTimeout.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const targetUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`;
-        const data = await robustProxyFetch(targetUrl);
-        if (data?.quotes) {
-          setStockResults(data.quotes.map((m: any) => `${m.symbol} (${m.shortname || m.longname || m.symbol})`));
-        }
-      } catch (err) {
-        console.error("Stock search failed:", err);
-      } finally {
-        setIsSearching(false);
-      }
+        const data = await robustProxyFetch(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`);
+        if (data?.quotes) setStockResults(data.quotes.map((m: any) => `${m.symbol} (${m.shortname || m.longname || m.symbol})`));
+      } finally { setIsSearching(false); }
     }, 300);
   }, []);
 
   const fetchSports = useCallback((q: string) => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!q || q.length < 2) return;
-
     searchTimeout.current = setTimeout(async () => {
+      if (!config.apiKeys.sports) return;
       setIsSearching(true);
       try {
-        const targetUrl = `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(q)}`;
-        const data = await robustProxyFetch(targetUrl);
-        if (data?.teams) {
-          setSportsResults(data.teams.map((t: any) => t.strTeam));
-        }
-      } catch (err) {
-        console.error("Sports search failed:", err);
-      } finally {
-        setIsSearching(false);
-      }
+        // API-Football team search
+        const res = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(q)}`, {
+          headers: { "x-apisports-key": config.apiKeys.sports }
+        });
+        const data = await res.json();
+        if (data?.response) setSportsResults(data.response.map((r: any) => r.team.name));
+      } finally { setIsSearching(false); }
     }, 300);
-  }, []);
+  }, [config.apiKeys.sports]);
 
   const finish = () => {
     saveConfig(config);
@@ -244,8 +215,9 @@ export default function Wizard({ onComplete }: WizardProps) {
               <div className="space-y-6">
                 <Label className="text-base font-semibold">API Credentials</Label>
                 {[
-                  { id: 'weather', label: 'OpenWeather', link: 'https://home.openweathermap.org/users/sign_up', help: 'Get a free key at openweathermap.org', tip: 'Powers local weather updates' },
-                  { id: 'news', label: 'GNews API', link: 'https://gnews.io/register', help: 'Get a free key at gnews.io', tip: 'Feeds the masonry-style news stream' }
+                  { id: 'weather', label: 'OpenWeather', link: 'https://home.openweathermap.org/users/sign_up', help: 'Get a free key at openweathermap.org', tip: 'Weather updates' },
+                  { id: 'news', label: 'GNews API', link: 'https://gnews.io/register', help: 'Get a free key at gnews.io', tip: 'News masonry' },
+                  { id: 'sports', label: 'API-Football', link: 'https://dashboard.api-football.com/register', help: 'Get a free key at api-football.com', tip: 'Live scores' }
                 ].map((api) => (
                   <div key={api.id} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -391,14 +363,14 @@ export default function Wizard({ onComplete }: WizardProps) {
                 )}
                 {config.enabledWidgets.sports && (
                   <div className="space-y-4">
-                    <Label className="text-base font-semibold">Sports Teams (TheSportsDB)</Label>
+                    <Label className="text-base font-semibold">Sports Teams (API-Football)</Label>
                     <AutocompletePillInput 
                       options={sportsResults}
                       values={config.sportsTeams}
                       onSearch={fetchSports}
                       isLoading={isSearching}
                       onChange={(vals) => setConfig(c => ({ ...c, sportsTeams: vals }))}
-                      placeholder="Search teams..."
+                      placeholder={config.apiKeys.sports ? "Search teams..." : "Add Sports API Key first"}
                     />
                   </div>
                 )}

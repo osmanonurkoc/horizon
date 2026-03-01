@@ -60,9 +60,6 @@
     min-width: 1024px;
     overflow-x: auto;
   }
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-headline;
-  }
 }
 
 @layer components {
@@ -71,7 +68,7 @@
   }
   
   .pulsating-dot {
-    @apply relative flex h-3 w-3;
+    @apply relative flex h-2 w-2;
   }
   
   .pulsating-dot::after {
@@ -81,7 +78,7 @@
   
   .pulsating-dot::before {
     content: '';
-    @apply relative inline-flex h-3 w-3 rounded-full bg-red-600;
+    @apply relative inline-flex h-2 w-2 rounded-full bg-red-600;
   }
 
   .masonry-grid {

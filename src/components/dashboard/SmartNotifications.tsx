@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Card, CardContent } from "@/components/ui/card";
-import { CloudRain, Trophy, TrendingUp, Loader2, Sun } from "lucide-react";
+import { CloudRain, Trophy, TrendingUp, Loader2, Sun, Timer } from "lucide-react";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 
 interface Insight {
@@ -12,12 +12,10 @@ interface Insight {
   message: string;
   icon: any;
   color: string;
+  isLive?: boolean;
 }
 
-/**
- * Robust fetcher that tries multiple proxies to avoid CORS and HTML-instead-of-JSON errors.
- */
-async function robustProxyFetch(targetUrl: string) {
+async function robustProxyFetch(targetUrl: string, options: RequestInit = {}) {
   const encodedUrl = encodeURIComponent(targetUrl);
   const proxies = [
     `https://api.allorigins.win/raw?url=${encodedUrl}`,
@@ -26,12 +24,10 @@ async function robustProxyFetch(targetUrl: string) {
 
   for (const proxyUrl of proxies) {
     try {
-      const res = await fetch(proxyUrl);
+      const res = await fetch(proxyUrl, options);
       if (!res.ok) continue;
-
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) continue;
-
       return await res.json();
     } catch (e) {}
   }
@@ -47,7 +43,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       setLoading(true);
       const newInsights: Insight[] = [];
 
-      // 1. Weather Event (Rain or Temperature shifts)
+      // 1. Weather Event
       if (config.enabledWidgets.weather && config.location && config.apiKeys.weather) {
         try {
           const forecast = await cachedFetch(
@@ -84,53 +80,60 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         } catch (e) {}
       }
 
-      // 2. Sports Insight (STRICTLY for Followed Teams Only - NO MOCK DATA)
-      if (config.enabledWidgets.sports && config.sportsTeams.length > 0) {
+      // 2. Sports Insight (API-Football)
+      if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
-          const allUpcomingMatches: any[] = [];
+          let sportInsight: Insight | null = null;
           
           for (const teamName of config.sportsTeams) {
-            // Step 1: Search for the specific team to get its ID
-            const searchData = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
-            
-            // Strictly match the team name from config
-            const team = searchData?.teams?.find((t: any) => 
-              t.strTeam.toLowerCase() === teamName.toLowerCase() || 
-              t.strAlternate?.toLowerCase() === teamName.toLowerCase()
-            );
+            // A. Search Team ID
+            const searchData = await robustProxyFetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
+              headers: { "x-apisports-key": config.apiKeys.sports }
+            });
+            const teamId = searchData?.response?.[0]?.team?.id;
 
-            if (team && team.idTeam) {
-              // Step 2: Get next events for this specific ID
-              const eventsData = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${team.idTeam}`);
-              if (eventsData?.events && eventsData.events.length > 0) {
-                allUpcomingMatches.push(...eventsData.events);
+            if (teamId) {
+              // B. Check LIVE first
+              const liveData = await robustProxyFetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&live=all`, {
+                headers: { "x-apisports-key": config.apiKeys.sports }
+              });
+              
+              if (liveData?.response?.length > 0) {
+                const match = liveData.response[0];
+                sportInsight = {
+                  type: 'sports',
+                  title: 'LIVE SCORE',
+                  message: `${match.teams.home.name} ${match.goals.home} - ${match.goals.away} ${match.teams.away.name} (${match.fixture.status.elapsed}')`,
+                  icon: Trophy,
+                  color: 'red',
+                  isLive: true
+                };
+                break; // Live takes priority
+              }
+
+              // C. Check NEXT if no live
+              if (!sportInsight) {
+                const nextData = await robustProxyFetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&next=1`, {
+                  headers: { "x-apisports-key": config.apiKeys.sports }
+                });
+                if (nextData?.response?.length > 0) {
+                  const match = nextData.response[0];
+                  sportInsight = {
+                    type: 'sports',
+                    title: 'Next Match',
+                    message: `${match.teams.home.name} vs ${match.teams.away.name} on ${new Date(match.fixture.date).toLocaleDateString()}`,
+                    icon: Trophy,
+                    color: 'red'
+                  };
+                }
               }
             }
           }
-
-          if (allUpcomingMatches.length > 0) {
-            // Sort by closest date and time
-            allUpcomingMatches.sort((a, b) => {
-              const dateA = new Date(`${a.dateEvent}T${a.strTime || '00:00:00'}`);
-              const dateB = new Date(`${b.dateEvent}T${b.strTime || '00:00:00'}`);
-              return dateA.getTime() - dateB.getTime();
-            });
-
-            const match = allUpcomingMatches[0];
-            newInsights.push({
-              type: 'sports',
-              title: 'Next Match',
-              message: `${match.strEvent} on ${match.dateEvent} at ${match.strTime ? match.strTime.substring(0, 5) : 'TBD'} (${match.strLeague})`,
-              icon: Trophy,
-              color: 'red'
-            });
-          }
-        } catch (e) {
-          // If fetch fails, we simply don't push the sport insight.
-        }
+          if (sportInsight) newInsights.push(sportInsight);
+        } catch (e) {}
       }
 
-      // 3. Market Insight (Top Mover)
+      // 3. Market Insight
       if (config.enabledWidgets.market && config.stocks.length > 0) {
         try {
           const symbol = config.stocks[0].split(' ')[0];
@@ -138,7 +141,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             `insight_market_pulse_${symbol}`,
             async () => {
               const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-              return await robustProxyFetch(url);
+              const encodedUrl = encodeURIComponent(url);
+              const res = await fetch(`https://api.allorigins.win/raw?url=${encodedUrl}`);
+              return res.ok ? await res.json() : null;
             },
             EXPIRY_TIMES.WEATHER
           );
@@ -197,11 +202,21 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           return (
             <Card key={idx} className={`rounded-3xl border-none border-l-4 shadow-sm group transition-all hover:scale-[1.02] ${colorClass}`}>
               <CardContent className="p-5 flex items-center gap-5">
-                <div className={`p-3 rounded-2xl text-white shadow-md ${iconBg}`}>
+                <div className={`p-3 rounded-2xl text-white shadow-md ${iconBg} relative`}>
                   <Icon className="w-6 h-6" />
+                  {insight.isLive && (
+                    <div className="absolute -top-1 -right-1">
+                      <div className="pulsating-dot" />
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-widest mb-0.5 opacity-80">{insight.title}</p>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">{insight.title}</p>
+                    {insight.isLive && (
+                      <span className="bg-red-500 text-white text-[8px] font-black px-1.5 rounded-sm animate-pulse">LIVE</span>
+                    )}
+                  </div>
                   <p className="text-sm font-bold text-foreground/80 leading-snug line-clamp-2">{insight.message}</p>
                 </div>
               </CardContent>
