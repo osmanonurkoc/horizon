@@ -39,7 +39,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         const result = await generatePersonalizedBriefing(input);
         setBriefing(result);
       } catch (err) {
-        setBriefing("Dashboard synchronized. Modules are up to date and ready.");
+        setBriefing("Dashboard synchronized. Your personalized modules are up to date.");
       } finally {
         setIsLoading(false);
       }
@@ -56,24 +56,23 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         {format(time, "EEEE, MMMM do, yyyy")}
       </p>
       
-      <div className="max-w-3xl w-full p-8 bg-primary/5 rounded-[2.5rem] border border-primary/20 backdrop-blur-sm relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-          <Sparkles className="w-12 h-12 text-primary" />
+      <div className="max-w-3xl w-full p-10 bg-primary/5 rounded-[3rem] border border-primary/20 backdrop-blur-md relative overflow-hidden group">
+        <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
+          <Sparkles className="w-16 h-16 text-primary" />
         </div>
         
-        <h2 className="text-2xl font-headline font-bold mb-4 text-foreground/90">
+        <h2 className="text-3xl font-headline font-bold mb-4 text-foreground/90">
           {greetingText}
         </h2>
         
         {isLoading ? (
-          <div className="space-y-3">
-            <div className="h-4 bg-primary/10 rounded-full w-full animate-skeleton" />
-            <div className="h-4 bg-primary/10 rounded-full w-[90%] animate-skeleton" />
-            <div className="h-4 bg-primary/10 rounded-full w-[80%] animate-skeleton" />
+          <div className="space-y-3 flex flex-col items-center">
+            <div className="h-4 bg-primary/10 rounded-full w-3/4 animate-skeleton" />
+            <div className="h-4 bg-primary/10 rounded-full w-1/2 animate-skeleton" />
           </div>
         ) : (
-          <p className="text-lg text-foreground/80 leading-relaxed font-body">
-            {briefing || "Dashboard synchronized. Modules are up to date and ready."}
+          <p className="text-lg text-foreground/70 leading-relaxed font-body italic max-w-2xl mx-auto">
+            {briefing || "Dashboard synchronized. Your personalized modules are up to date."}
           </p>
         )}
       </div>

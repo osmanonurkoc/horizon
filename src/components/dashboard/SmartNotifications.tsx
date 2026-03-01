@@ -16,36 +16,6 @@ interface Insight {
   isLive?: boolean;
 }
 
-// Single Fetch Strategy with Caching and Server Action
-async function getFixturesCached(teamId: number, apiKey: string) {
-  const cacheKey = `sports_fixtures_v2_${teamId}`;
-  const cached = typeof window !== 'undefined' ? localStorage.getItem(cacheKey) : null;
-  
-  if (cached) {
-    try {
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < 300000) return data; 
-    } catch (e) {
-      localStorage.removeItem(cacheKey);
-    }
-  }
-
-  const month = new Date().getMonth();
-  const year = new Date().getFullYear();
-  const season = month < 7 ? year - 1 : year;
-
-  try {
-    const response = await fetchSportsAction(`fixtures?team=${teamId}&season=${season}`, apiKey);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
-    }
-    return response;
-  } catch (e) {
-    console.warn(`Sports Insight Fetch Error for team ${teamId}:`, e);
-    return [];
-  }
-}
-
 export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +56,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               newInsights.push({
                 type: 'weather',
                 title: 'Clear Skies',
-                message: `Skies remain clear in ${config.location}. Perfect for the day ahead.`,
+                message: `Conditions remain favorable for outdoor activities in ${config.location}.`,
                 icon: Sun,
                 color: 'blue'
               });
@@ -97,16 +67,28 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 2. Sports Insight (Strict API-Football)
+      // 2. Sports Insight (API-Football)
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
-          const now = Math.floor(Date.now() / 1000);
           
           for (const team of config.sportsTeams) {
-            const fixtures = await getFixturesCached(team.id, config.apiKeys.sports);
+            // Fetch cached season data via server action
+            const month = new Date().getMonth();
+            const year = new Date().getFullYear();
+            const season = month < 7 ? year - 1 : year;
+            
+            const fixtures = await cachedFetch(
+              `sports_fixtures_insight_${team.id}`,
+              () => fetchSportsAction(`fixtures?team=${team.id}&season=${season}`, config.apiKeys.sports),
+              300000 // 5 min cache
+            );
+
             if (!fixtures || fixtures.length === 0) continue;
 
+            const now = Math.floor(Date.now() / 1000);
+            
+            // Check for Live
             const liveMatch = fixtures.find((f: any) => 
               ['1H', '2H', 'HT', 'ET', 'P', 'BT'].includes(f.fixture.status.short)
             );
@@ -123,6 +105,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               break;
             }
 
+            // Check for Next
             const nextMatch = fixtures
               .filter((f: any) => f.fixture.timestamp > now && f.fixture.status.short === 'NS')
               .sort((a: any, b: any) => a.fixture.timestamp - b.fixture.timestamp)[0];
@@ -150,7 +133,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         try {
           const symbol = config.stocks[0].split(' ')[0];
           const marketInsight = await cachedFetch(
-            `insight_market_v2_${symbol}`,
+            `insight_market_v3_${symbol}`,
             async () => {
               const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`)}`;
               const res = await fetch(url);
@@ -168,7 +151,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               newInsights.push({
                 type: 'market',
                 title: 'Portfolio Trend',
-                message: `${symbol} is ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% today.`,
+                message: `${symbol} is ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% in this session.`,
                 icon: TrendingUp,
                 color: 'emerald'
               });
@@ -188,9 +171,9 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
 
   if (loading) {
     return (
-      <div className="flex gap-4 justify-center items-center py-4">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Synthesizing Briefing...</span>
+      <div className="flex gap-4 justify-center items-center py-6">
+        <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
+        <span className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">Synthesizing Briefing...</span>
       </div>
     );
   }
@@ -198,25 +181,25 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   if (insights.length === 0) return null;
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 justify-center">
+    <div className="w-full max-w-7xl mx-auto px-6 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {insights.map((insight, idx) => {
           const Icon = insight.icon;
           const colorClass = 
-            insight.color === 'blue' ? 'bg-blue-500/10 border-l-blue-500 text-blue-700' :
-            insight.color === 'red' ? 'bg-red-500/10 border-l-red-500 text-red-700' :
-            'bg-emerald-500/10 border-l-emerald-500 text-emerald-700';
+            insight.color === 'blue' ? 'bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300' :
+            insight.color === 'red' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' :
+            'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300';
           
           const iconBg = 
-            insight.color === 'blue' ? 'bg-blue-500' :
-            insight.color === 'red' ? 'bg-red-500' :
-            'bg-emerald-500';
+            insight.color === 'blue' ? 'bg-blue-500 shadow-blue-500/30' :
+            insight.color === 'red' ? 'bg-red-500 shadow-red-500/30' :
+            'bg-emerald-500 shadow-emerald-500/30';
 
           return (
-            <Card key={idx} className={`rounded-3xl border-none border-l-4 shadow-sm group transition-all hover:scale-[1.02] ${colorClass}`}>
-              <CardContent className="p-5 flex items-center gap-5">
-                <div className={`p-3 rounded-2xl text-white shadow-md ${iconBg} relative`}>
-                  <Icon className="w-6 h-6" />
+            <Card key={idx} className={`rounded-[2rem] border shadow-sm group transition-all hover:scale-[1.02] hover:shadow-lg ${colorClass}`}>
+              <CardContent className="p-6 flex items-center gap-6">
+                <div className={`p-4 rounded-2xl text-white shadow-lg ${iconBg} relative shrink-0`}>
+                  <Icon className="w-7 h-7" />
                   {insight.isLive && (
                     <div className="absolute -top-1 -right-1">
                       <div className="pulsating-dot" />
@@ -224,13 +207,13 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">{insight.title}</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-70">{insight.title}</p>
                     {insight.isLive && (
-                      <span className="bg-red-500 text-white text-[8px] font-black px-1.5 rounded-sm animate-pulse">LIVE</span>
+                      <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-sm animate-pulse">LIVE</span>
                     )}
                   </div>
-                  <p className="text-sm font-bold text-foreground/80 leading-snug line-clamp-2">{insight.message}</p>
+                  <p className="text-base font-bold text-foreground/90 leading-tight line-clamp-2">{insight.message}</p>
                 </div>
               </CardContent>
             </Card>
