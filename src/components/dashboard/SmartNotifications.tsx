@@ -20,8 +20,12 @@ async function fetchTeamFixtures(teamId: number, apiKey: string) {
   const cacheKey = `sports_fixtures_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
-    const { data, timestamp } = JSON.parse(cached);
-    if (Date.now() - timestamp < 300000) return data; // 5 min cache
+    try {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < 300000) return data; // 5 min cache
+    } catch (e) {
+      localStorage.removeItem(cacheKey);
+    }
   }
 
   const month = new Date().getMonth();
@@ -29,10 +33,16 @@ async function fetchTeamFixtures(teamId: number, apiKey: string) {
   const season = month < 7 ? year - 1 : year;
 
   // Use corsproxy.io to bypass strict browser CORS issues
-  const url = `https://corsproxy.io/?https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+  const targetUrl = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+  const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
   
   try {
-    const res = await fetch(url, { headers: { "x-apisports-key": apiKey } });
+    const res = await fetch(url, { 
+      headers: { "x-apisports-key": apiKey },
+      signal: AbortSignal.timeout(10000)
+    });
+    
+    if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
     const json = await res.json();
     
     if (json.errors && Object.keys(json.errors).length > 0) {
@@ -42,7 +52,7 @@ async function fetchTeamFixtures(teamId: number, apiKey: string) {
     localStorage.setItem(cacheKey, JSON.stringify({ data: json.response, timestamp: Date.now() }));
     return json.response;
   } catch (e) {
-    console.error("Sports Fetch Error:", e);
+    console.warn(`Sports Fetch Error for team ${teamId}:`, e);
     return [];
   }
 }

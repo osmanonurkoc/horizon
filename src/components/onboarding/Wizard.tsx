@@ -98,11 +98,12 @@ export default function Wizard({ onComplete }: WizardProps) {
 
   const fetchSports = useCallback((q: string) => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!q || q.length < 2) return;
+    // Sanitize input to alpha-numeric and spaces only
+    const sanitizedQ = q.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    if (!sanitizedQ || sanitizedQ.length < 2) return;
     
     searchTimeout.current = setTimeout(async () => {
-      const sanitizedQ = q.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-      if (!config.apiKeys.sports || !sanitizedQ) return;
+      if (!config.apiKeys.sports) return;
 
       setIsSearching(true);
       try {
@@ -341,7 +342,6 @@ export default function Wizard({ onComplete }: WizardProps) {
                     onChange={(vals) => {
                       const selectedNames = vals;
                       const newTeams = sportsResults.filter(t => selectedNames.includes(t.name));
-                      // Keep already selected teams that weren't in the search results
                       const existingTeams = config.sportsTeams.filter(t => selectedNames.includes(t.name));
                       const combined = Array.from(new Map([...existingTeams, ...newTeams].map(t => [t.id, t])).values());
                       setConfig(c => ({ ...c, sportsTeams: combined }));
