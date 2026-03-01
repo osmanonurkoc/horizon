@@ -8,20 +8,37 @@ import { generatePersonalizedBriefing } from "@/ai/flows/personalized-briefing";
 import { Sparkles } from "lucide-react";
 
 const EASTER_EGGS = [
-  "Ready to push some flawless code today?",
-  "Time to fire up the 3D renderer and craft something amazing.",
-  "Don't forget your lean muscle workout today! Stay slim and strong.",
-  "Another perfect day for open-source contributions.",
-  "Ready to design some fresh UI themes?",
-  "Boot up the pen display, it's time to draw.",
-  "Welcome back. Your dashboard is ready."
+  "Take a deep breath and enjoy the moment.",
+  "Here is to making today a great one.",
+  "Stay hydrated and remember to take a quick break.",
+  "A beautiful day begins with a positive mindset.",
+  "Small steps every day lead to big journeys.",
+  "Hope you find something that makes you smile today.",
+  "Let's see what the world has in store for you.",
+  "Everything you need, right at your fingertips.",
+  "Stay curious, stay inspired.",
+  "Wishing you focus and clarity for the hours ahead.",
+  "Remember to celebrate the little wins today.",
+  "Your daily digest, served fresh.",
+  "Take things one step at a time.",
+  "Welcome to your personal horizon.",
+  "Wishing you a peaceful and productive day."
 ];
+
+const getTimeGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  if (hour >= 17 && hour < 22) return "Good evening";
+  return "Good night";
+};
 
 export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfig, refreshKey?: number }) {
   const [time, setTime] = useState(new Date());
   const [briefing, setBriefing] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [greetingText, setGreetingText] = useState("");
+  const [timeGreeting, setTimeGreeting] = useState("");
+  const [randomMessage, setRandomMessage] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -29,9 +46,12 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
   }, []);
 
   useEffect(() => {
-    // Select a random Easter Egg on mount
-    const selected = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
-    setGreetingText(selected);
+    // Select a random message and time-based greeting on mount to avoid hydration mismatch
+    const greeting = getTimeGreeting();
+    const message = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
+    
+    setTimeGreeting(greeting);
+    setRandomMessage(message);
 
     const fetchBriefing = async () => {
       setIsLoading(true);
@@ -63,7 +83,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         </div>
         
         <h2 className="text-3xl font-headline font-bold mb-4 text-foreground/90">
-          {greetingText}
+          {timeGreeting ? `${timeGreeting}.` : "Welcome back."}
         </h2>
         
         {isLoading ? (
@@ -73,7 +93,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
           </div>
         ) : (
           <p className="text-lg text-foreground/70 leading-relaxed font-body italic max-w-2xl mx-auto">
-            {briefing || "Dashboard synchronized. Your personalized modules are up to date."}
+            {randomMessage} {briefing || "Dashboard synchronized. Your personalized modules are up to date."}
           </p>
         )}
       </div>
