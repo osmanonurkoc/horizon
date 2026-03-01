@@ -74,23 +74,24 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           
           for (const teamName of config.sportsTeams) {
             try {
-              // Step 1: Search Team to get ID
-              const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
+              const sanitizedTeamName = teamName.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+              if (!sanitizedTeamName) continue;
+
+              const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(sanitizedTeamName)}`, {
                 headers: { "x-apisports-key": config.apiKeys.sports }
               });
               if (!searchRes.ok) continue;
               const searchData = await searchRes.json();
               
-              // Intercept API Errors
               if (searchData.errors && Object.keys(searchData.errors).length > 0) {
-                console.error("API-Football Search Error:", Object.values(searchData.errors)[0]);
+                console.warn("API-Football Search Error:", Object.values(searchData.errors)[0]);
                 continue;
               }
 
               const teamId = searchData?.response?.[0]?.team?.id;
 
               if (teamId) {
-                // Step 2: Check for LIVE match
+                // Check LIVE
                 const liveRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&live=all`, {
                   headers: { "x-apisports-key": config.apiKeys.sports }
                 });
@@ -106,11 +107,11 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                       color: 'red',
                       isLive: true
                     };
-                    break; // Live takes priority
+                    break;
                   }
                 }
 
-                // Step 3: Check for NEXT match if no live
+                // Check NEXT
                 if (!sportInsight) {
                   const nextRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&next=1`, {
                     headers: { "x-apisports-key": config.apiKeys.sports }
@@ -126,18 +127,19 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                         icon: Trophy,
                         color: 'red'
                       };
+                      break; 
                     }
                   }
                 }
               }
             } catch (teamError) {
-              console.warn(`Failed to fetch sports data for ${teamName}:`, teamError);
-              continue; 
+              console.warn(`Sports fetch error for ${teamName}:`, teamError);
+              continue;
             }
           }
           if (sportInsight) newInsights.push(sportInsight);
         } catch (e) {
-          console.error("Global Sports Insight Error:", e);
+          console.warn("Global Sports Insight Error:", e);
         }
       }
 

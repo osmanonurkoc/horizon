@@ -115,19 +115,25 @@ export default function Wizard({ onComplete }: WizardProps) {
     if (!q || q.length < 2) return;
     
     searchTimeout.current = setTimeout(async () => {
+      const sanitizedQ = q.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+      
       if (!config.apiKeys.sports) {
         setSportsResults(["Please enter your API-Football key above first."]);
         return;
       }
+      if (!sanitizedQ) {
+        setSportsResults([]);
+        return;
+      }
+
       setIsSearching(true);
       try {
-        const res = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(q)}`, {
+        const res = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(sanitizedQ)}`, {
           headers: { "x-apisports-key": config.apiKeys.sports }
         });
         if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
         const data = await res.json();
         
-        // Handle API-Football Errors
         if (data.errors && Object.keys(data.errors).length > 0) {
           const errorMsg = Object.values(data.errors)[0] as string;
           setSportsResults([`API Error: ${errorMsg}`]);

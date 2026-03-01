@@ -39,8 +39,12 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
             `sports_v21_${teamName.replace(/\s+/g, '_')}`,
             async () => {
               try {
+                // Sanitize team name for API-Football (alpha-numeric and spaces only)
+                const sanitizedTeamName = teamName.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+                if (!sanitizedTeamName) return null;
+
                 // 1. Search Team
-                const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
+                const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(sanitizedTeamName)}`, {
                   headers: { "x-apisports-key": config.apiKeys.sports }
                 });
                 if (!searchRes.ok) throw new Error(`HTTP Error ${searchRes.status}`);
@@ -49,14 +53,13 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                 
                 // Intercept API-Football Errors
                 if (searchJson.errors && Object.keys(searchJson.errors).length > 0) {
-                  throw new Error(Object.values(searchJson.errors)[0] as string);
+                  const apiError = Object.values(searchJson.errors)[0] as string;
+                  console.warn("API-Football Widget Error:", apiError);
+                  throw new Error(apiError);
                 }
 
                 const teamId = searchJson.response?.[0]?.team?.id;
-                if (!teamId) {
-                  console.warn(`Team "${teamName}" not found on API-Football.`);
-                  return null;
-                }
+                if (!teamId) return null;
 
                 // 2. Get Last 5 Fixtures
                 const fixturesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&last=5`, {
@@ -86,8 +89,8 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                   date: new Date(lastMatch.fixture.date).toLocaleDateString()
                 } as TeamResult;
               } catch (e: any) {
-                console.error(`Sports fetch error for ${teamName}:`, e.message);
-                throw e; // Bubble up for general error handling
+                console.warn(`Sports fetch skip for ${teamName}:`, e.message);
+                return null;
               }
             },
             SPORTS_CACHE_EXPIRY

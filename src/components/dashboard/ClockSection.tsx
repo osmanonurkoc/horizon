@@ -20,7 +20,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
   const [time, setTime] = useState(new Date());
   const [briefing, setBriefing] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [randomGreeting, setRandomGreeting] = useState("");
+  const [greetingText, setGreetingText] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -28,6 +28,10 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
   }, []);
 
   useEffect(() => {
+    // Select a random Easter Egg on mount or config change
+    const selected = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
+    setGreetingText(selected);
+
     const fetchBriefing = async () => {
       setIsLoading(true);
       try {
@@ -41,10 +45,6 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
       }
     };
     fetchBriefing();
-    
-    // Pick a random Easter Egg on mount
-    const selected = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
-    setRandomGreeting(selected);
   }, [config, refreshKey]);
 
   return (
@@ -62,7 +62,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         </div>
         
         <h2 className="text-2xl font-headline font-bold mb-4 text-foreground/90">
-          {randomGreeting}
+          {greetingText}
         </h2>
         
         {isLoading ? (
