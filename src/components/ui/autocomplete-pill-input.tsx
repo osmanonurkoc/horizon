@@ -38,7 +38,7 @@ export function AutocompletePillInput({
   isMulti = true,
 }: AutocompletePillInputProps) {
   const [open, setOpen] = React.useState(false);
-  const [inputValue, setInputValue] = React.useState("");
+  const [inputValue, setInputValue] = React.setState("");
   const [options, setOptions] = React.useState<AutocompleteOption[]>([]);
   const [loading, setLoading] = React.useState(false);
 
@@ -95,7 +95,6 @@ export function AutocompletePillInput({
             setLoading(false);
             return;
           }
-          // Direct client-side fetch to avoid Server Action 404s
           const url = `https://v3.football.api-sports.io/teams?search=${encodeURIComponent(inputValue)}`;
           const res = await fetch(url, {
             headers: { 
@@ -132,13 +131,20 @@ export function AutocompletePillInput({
     };
   }, [inputValue, searchType, apiKey, staticOptions, options.length]);
 
+  const areValuesEqual = (a: any, b: any) => {
+    const isAObj = a !== null && typeof a === 'object';
+    const isBObj = b !== null && typeof b === 'object';
+    if (isAObj && isBObj) {
+      return a.id === b.id;
+    }
+    return a === b;
+  };
+
   const handleSelect = (option: AutocompleteOption) => {
     if (option.value === null) return;
     
     if (isMulti) {
-      const exists = values.some(v => 
-        typeof v === 'object' ? v.id === option.value.id : v === option.value
-      );
+      const exists = values.some(v => areValuesEqual(v, option.value));
       if (!exists) {
         onChange([...values, option.value]);
       }
@@ -150,16 +156,12 @@ export function AutocompletePillInput({
   };
 
   const getLabel = (val: any) => {
-    if (typeof val === 'object' && val !== null) return val.name;
+    if (val !== null && typeof val === 'object') return val.name;
     return val;
   };
 
   const isSelected = (optionValue: any) => {
-    return values.some(v => 
-      typeof v === 'object' && typeof optionValue === 'object' 
-        ? v.id === optionValue.id 
-        : v === optionValue
-    );
+    return values.some(v => areValuesEqual(v, optionValue));
   };
 
   return (
