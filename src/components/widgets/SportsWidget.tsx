@@ -95,11 +95,13 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     setError(null);
     try {
       const teamResults: TeamResult[] = [];
+      const now = Math.floor(Date.now() / 1000);
       
       // PRODUCTION FIX: Use sequential loop with delay to avoid rate limit bursts (10 req/min)
       for (const team of config.sportsTeams) {
         const fixtures = await getFixturesClient(team.id, config.apiKeys.sports);
         if (fixtures && fixtures.length > 0) {
+          // Priority 1: Check for Live Match
           const liveMatch = fixtures.find((f: any) => 
             ['1H', '2H', 'HT', 'ET', 'P', 'BT', 'LIVE'].includes(f.fixture.status.short)
           );
@@ -115,21 +117,40 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
               date: new Date(liveMatch.fixture.date).toLocaleDateString()
             });
           } else {
-            const finishedMatches = fixtures
-              .filter((f: any) => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short))
-              .sort((a: any, b: any) => b.fixture.timestamp - a.fixture.timestamp);
+            // Priority 2: Check for Next Match (REPLACES LATEST RESULT FOCUS)
+            const nextMatch = fixtures
+              .filter((f: any) => f.fixture.timestamp > now && ['NS', 'TBD'].includes(f.fixture.status.short))
+              .sort((a: any, b: any) => a.fixture.timestamp - b.fixture.timestamp)[0];
 
-            if (finishedMatches.length > 0) {
-              const lastMatch = finishedMatches[0];
-              const isHome = lastMatch.teams.home.id === team.id;
+            if (nextMatch) {
+              const isHome = nextMatch.teams.home.id === team.id;
+              const kickoffTime = new Date(nextMatch.fixture.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               teamResults.push({
                 teamName: team.name,
-                lastScore: `${lastMatch.goals.home} - ${lastMatch.goals.away}`,
-                opponent: isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name,
+                lastScore: kickoffTime,
+                opponent: isHome ? nextMatch.teams.away.name : nextMatch.teams.home.name,
                 isLive: false,
-                status: 'FT',
-                date: new Date(lastMatch.fixture.date).toLocaleDateString()
+                status: 'NEXT',
+                date: new Date(nextMatch.fixture.date).toLocaleDateString()
               });
+            } else {
+              // Priority 3: Fallback to Latest Result (only if no future games found)
+              const finishedMatches = fixtures
+                .filter((f: any) => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short))
+                .sort((a: any, b: any) => b.fixture.timestamp - a.fixture.timestamp);
+
+              if (finishedMatches.length > 0) {
+                const lastMatch = finishedMatches[0];
+                const isHome = lastMatch.teams.home.id === team.id;
+                teamResults.push({
+                  teamName: team.name,
+                  lastScore: `${lastMatch.goals.home} - ${lastMatch.goals.away}`,
+                  opponent: isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name,
+                  isLive: false,
+                  status: 'FT',
+                  date: new Date(lastMatch.fixture.date).toLocaleDateString()
+                });
+              }
             }
           }
         }
@@ -197,7 +218,9 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                     {result.isLive && <div className="pulsating-dot" />}
                     <span className={cn(
                       "text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter",
-                      result.isLive ? "text-red-600 bg-red-100" : "text-muted-foreground bg-muted"
+                      result.isLive ? "text-red-600 bg-red-100" : 
+                      result.status === 'NEXT' ? "text-primary bg-primary/10" :
+                      "text-muted-foreground bg-muted"
                     )}>
                       {result.status}
                     </span>
@@ -218,18 +241,18 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline font-bold">Stadium Insights</DialogTitle>
           <DialogDescription>
-            Live scores and verified historical performance via API-Football.
+            Upcoming fixtures and verified historical performance via API-Football.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-6">
           <div className="p-6 bg-secondary/5 rounded-3xl border border-secondary/10 space-y-4">
             <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4 text-secondary" /> Network Status</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Global stadium data is cached for 5 minutes. Sequential updates protect the Stadium Network from congestion.
+              Global stadium data is cached for 5 minutes. We prioritize upcoming fixtures to keep your schedule accurate.
             </p>
           </div>
           <div className="space-y-3">
-            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Recent Results</h4>
+            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Current Horizon</h4>
             {results.map((res, idx) => (
               <div key={idx} className="flex justify-between items-center p-4 bg-muted/20 rounded-2xl hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-3">

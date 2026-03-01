@@ -124,7 +124,8 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 2. Sports Insight (Aggregated Priority: Live > Next > Latest)
+      // 2. Sports Insight (Aggregated Priority: Live > Next)
+      // Removed "Latest Result" to focus on upcoming/live events as requested.
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           const now = Math.floor(Date.now() / 1000);
@@ -149,10 +150,6 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             const nextMatch = allFixtures
               .filter(f => f.fixture.timestamp > now && ['NS', 'TBD'].includes(f.fixture.status.short))
               .sort((a, b) => a.fixture.timestamp - b.fixture.timestamp)[0];
-              
-            const lastMatch = allFixtures
-              .filter(f => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short))
-              .sort((a, b) => b.fixture.timestamp - a.fixture.timestamp)[0];
 
             let sportInsight: Insight | null = null;
 
@@ -171,14 +168,6 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
                 type: 'sports',
                 title: 'Next Match',
                 message: `${nextMatch.teams.home.name} vs ${nextMatch.teams.away.name} on ${date}`,
-                icon: Trophy,
-                color: 'red'
-              };
-            } else if (lastMatch) {
-              sportInsight = {
-                type: 'sports',
-                title: 'Latest Result',
-                message: `${lastMatch.teams.home.name} ${lastMatch.goals.home} - ${lastMatch.goals.away} ${lastMatch.teams.away.name}`,
                 icon: Trophy,
                 color: 'red'
               };
