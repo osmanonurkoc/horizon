@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -27,9 +28,11 @@ interface AutocompletePillInputProps {
   isMulti?: boolean;
 }
 
+const EMPTY_STATIC_OPTIONS: string[] = [];
+
 export function AutocompletePillInput({
   searchType,
-  staticOptions = [],
+  staticOptions = EMPTY_STATIC_OPTIONS,
   apiKey,
   values,
   onChange,
@@ -49,9 +52,11 @@ export function AutocompletePillInput({
     // Clear previous timeout
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
+    // If input is short, clear options and return
     if (!inputValue || inputValue.trim().length < 2) {
       if (searchType !== 'static') {
-        setOptions([]);
+        // Only update if options isn't already empty to prevent loops
+        setOptions(prev => prev.length === 0 ? prev : []);
         return;
       }
     }
@@ -61,7 +66,13 @@ export function AutocompletePillInput({
       const filtered = staticOptions
         .filter(opt => opt.toLowerCase().includes(inputValue.toLowerCase()))
         .map(opt => ({ label: opt, value: opt }));
-      setOptions(filtered);
+      
+      // Basic check to prevent redundant updates
+      setOptions(prev => {
+        const isSame = prev.length === filtered.length && 
+                      prev.every((v, i) => v.value === filtered[i].value);
+        return isSame ? prev : filtered;
+      });
       return;
     }
 
