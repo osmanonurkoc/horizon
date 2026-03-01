@@ -15,6 +15,38 @@ interface Insight {
   isLive?: boolean;
 }
 
+// Single Fetch Strategy with Caching
+async function fetchTeamFixtures(teamId: number, apiKey: string) {
+  const cacheKey = `sports_fixtures_${teamId}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    const { data, timestamp } = JSON.parse(cached);
+    if (Date.now() - timestamp < 300000) return data; // 5 min cache
+  }
+
+  const month = new Date().getMonth();
+  const year = new Date().getFullYear();
+  const season = month < 7 ? year - 1 : year;
+
+  // Use corsproxy.io to bypass strict browser CORS issues
+  const url = `https://corsproxy.io/?https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+  
+  try {
+    const res = await fetch(url, { headers: { "x-apisports-key": apiKey } });
+    const json = await res.json();
+    
+    if (json.errors && Object.keys(json.errors).length > 0) {
+      throw new Error(Object.values(json.errors)[0] as string);
+    }
+    
+    localStorage.setItem(cacheKey, JSON.stringify({ data: json.response, timestamp: Date.now() }));
+    return json.response;
+  } catch (e) {
+    console.error("Sports Fetch Error:", e);
+    return [];
+  }
+}
+
 export function SmartNotifications({ config }: { config: DiscoverConfig }) {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +62,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           const forecast = await cachedFetch(
             `insight_weather_event_${config.location}`,
             async () => {
-              const url = `https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
+              const url = `https://corsproxy.io/?https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
               const res = await fetch(url);
               return res.ok ? await res.json() : null;
             },
@@ -71,70 +103,44 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
+          const now = Math.floor(Date.now() / 1000);
           
-          for (const teamName of config.sportsTeams) {
-            try {
-              const sanitizedTeamName = teamName.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-              if (!sanitizedTeamName) continue;
+          for (const team of config.sportsTeams) {
+            const fixtures = await fetchTeamFixtures(team.id, config.apiKeys.sports);
+            if (!fixtures || fixtures.length === 0) continue;
 
-              const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(sanitizedTeamName)}`, {
-                headers: { "x-apisports-key": config.apiKeys.sports }
-              });
-              if (!searchRes.ok) continue;
-              const searchData = await searchRes.json();
-              
-              if (searchData.errors && Object.keys(searchData.errors).length > 0) {
-                console.warn("API-Football Search Error:", Object.values(searchData.errors)[0]);
-                continue;
-              }
+            // Check for LIVE
+            const liveMatch = fixtures.find((f: any) => 
+              ['1H', '2H', 'HT', 'ET', 'P', 'BT'].includes(f.fixture.status.short)
+            );
 
-              const teamId = searchData?.response?.[0]?.team?.id;
+            if (liveMatch) {
+              sportInsight = {
+                type: 'sports',
+                title: 'LIVE SCORE',
+                message: `${liveMatch.teams.home.name} ${liveMatch.goals.home} - ${liveMatch.goals.away} ${liveMatch.teams.away.name} (${liveMatch.fixture.status.elapsed}')`,
+                icon: Trophy,
+                color: 'red',
+                isLive: true
+              };
+              break;
+            }
 
-              if (teamId) {
-                // Check LIVE
-                const liveRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&live=all`, {
-                  headers: { "x-apisports-key": config.apiKeys.sports }
-                });
-                if (liveRes.ok) {
-                  const liveData = await liveRes.json();
-                  if (liveData?.response?.length > 0) {
-                    const match = liveData.response[0];
-                    sportInsight = {
-                      type: 'sports',
-                      title: 'LIVE SCORE',
-                      message: `${match.teams.home.name} ${match.goals.home} - ${match.goals.away} ${match.teams.away.name} (${match.fixture.status.elapsed}')`,
-                      icon: Trophy,
-                      color: 'red',
-                      isLive: true
-                    };
-                    break;
-                  }
-                }
+            // Check for NEXT
+            const nextMatch = fixtures
+              .filter((f: any) => f.fixture.timestamp > now && f.fixture.status.short === 'NS')
+              .sort((a: any, b: any) => a.fixture.timestamp - b.fixture.timestamp)[0];
 
-                // Check NEXT
-                if (!sportInsight) {
-                  const nextRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&next=1`, {
-                    headers: { "x-apisports-key": config.apiKeys.sports }
-                  });
-                  if (nextRes.ok) {
-                    const nextData = await nextRes.json();
-                    if (nextData?.response?.length > 0) {
-                      const match = nextData.response[0];
-                      sportInsight = {
-                        type: 'sports',
-                        title: 'Next Match',
-                        message: `${match.teams.home.name} vs ${match.teams.away.name} on ${new Date(match.fixture.date).toLocaleDateString()}`,
-                        icon: Trophy,
-                        color: 'red'
-                      };
-                      break; 
-                    }
-                  }
-                }
-              }
-            } catch (teamError) {
-              console.warn(`Sports fetch error for ${teamName}:`, teamError);
-              continue;
+            if (nextMatch) {
+              const date = new Date(nextMatch.fixture.date).toLocaleDateString();
+              sportInsight = {
+                type: 'sports',
+                title: 'Next Match',
+                message: `${nextMatch.teams.home.name} vs ${nextMatch.teams.away.name} on ${date}`,
+                icon: Trophy,
+                color: 'red'
+              };
+              break; 
             }
           }
           if (sportInsight) newInsights.push(sportInsight);
@@ -151,8 +157,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             `insight_market_pulse_${symbol}`,
             async () => {
               const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-              const encodedUrl = encodeURIComponent(url);
-              const res = await fetch(`https://api.allorigins.win/raw?url=${encodedUrl}`);
+              const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
               return res.ok ? await res.json() : null;
             },
             EXPIRY_TIMES.WEATHER

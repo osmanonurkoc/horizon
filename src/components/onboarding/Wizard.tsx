@@ -9,39 +9,21 @@ import { Switch } from "@/components/ui/switch";
 import { Pill } from "@/components/ui/pill";
 import { 
   HelpCircle, ArrowRight, ArrowLeft, Check, Plus, 
-  Download, Upload, ChevronUp, ChevronDown, Monitor
+  Download, Upload, ChevronUp, ChevronDown, Monitor, Loader2
 } from "lucide-react";
 import { 
-  type DiscoverConfig, saveConfig, DEFAULT_CONFIG, getConfig, SEARCH_ENGINES 
+  type DiscoverConfig, saveConfig, DEFAULT_CONFIG, getConfig, SEARCH_ENGINES, type SportsTeam 
 } from "@/lib/config-store";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AutocompletePillInput } from "@/components/ui/autocomplete-pill-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 const GNEWS_LANGUAGES = ["ar", "de", "en", "es", "fr", "he", "it", "nl", "no", "pt", "ru", "se", "tr", "zh"];
 const GNEWS_TOPICS = ["general", "world", "nation", "business", "technology", "entertainment", "sports", "science", "health"];
 
 interface WizardProps {
   onComplete: (config: DiscoverConfig) => void;
-}
-
-async function robustProxyFetch(targetUrl: string, options: RequestInit = {}) {
-  const encodedUrl = encodeURIComponent(targetUrl);
-  const proxies = [
-    `https://api.allorigins.win/raw?url=${encodedUrl}`,
-    `https://corsproxy.io/?${encodedUrl}`
-  ];
-
-  for (const proxyUrl of proxies) {
-    try {
-      const res = await fetch(proxyUrl, options);
-      if (!res.ok) continue;
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) continue;
-      return await res.json();
-    } catch (e) {}
-  }
-  return null;
 }
 
 export default function Wizard({ onComplete }: WizardProps) {
@@ -52,7 +34,7 @@ export default function Wizard({ onComplete }: WizardProps) {
 
   const [locationResults, setLocationResults] = useState<string[]>([]);
   const [stockResults, setStockResults] = useState<string[]>([]);
-  const [sportsResults, setSportsResults] = useState<string[]>([]);
+  const [sportsResults, setSportsResults] = useState<SportsTeam[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -88,7 +70,9 @@ export default function Wizard({ onComplete }: WizardProps) {
       if (!config.apiKeys.weather) return;
       setIsSearching(true);
       try {
-        const data = await robustProxyFetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`);
+        const url = `https://corsproxy.io/?https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${config.apiKeys.weather}`;
+        const res = await fetch(url);
+        const data = await res.json();
         if (Array.isArray(data)) setLocationResults(data.map((l: any) => `${l.name}, ${l.country}`));
       } catch (e) {
         console.warn("Location fetch error:", e);
@@ -102,7 +86,9 @@ export default function Wizard({ onComplete }: WizardProps) {
     searchTimeout.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const data = await robustProxyFetch(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`);
+        const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`;
+        const res = await fetch(url);
+        const data = await res.json();
         if (data?.quotes) setStockResults(data.quotes.map((m: any) => `${m.symbol} (${m.shortname || m.longname || m.symbol})`));
       } catch (e) {
         console.warn("Stock fetch error:", e);
@@ -116,42 +102,30 @@ export default function Wizard({ onComplete }: WizardProps) {
     
     searchTimeout.current = setTimeout(async () => {
       const sanitizedQ = q.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-      
-      if (!config.apiKeys.sports) {
-        setSportsResults(["Please enter your API-Football key above first."]);
-        return;
-      }
-      if (!sanitizedQ) {
-        setSportsResults([]);
-        return;
-      }
+      if (!config.apiKeys.sports || !sanitizedQ) return;
 
       setIsSearching(true);
       try {
-        const res = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(sanitizedQ)}`, {
+        const url = `https://corsproxy.io/?https://v3.football.api-sports.io/teams?search=${encodeURIComponent(sanitizedQ)}`;
+        const res = await fetch(url, {
           headers: { "x-apisports-key": config.apiKeys.sports }
         });
-        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
         const data = await res.json();
         
         if (data.errors && Object.keys(data.errors).length > 0) {
-          const errorMsg = Object.values(data.errors)[0] as string;
-          setSportsResults([`API Error: ${errorMsg}`]);
+          console.warn("API-Football Search Error:", Object.values(data.errors)[0]);
           return;
         }
 
-        if (data?.response && Array.isArray(data.response)) {
-          if (data.response.length === 0) {
-            setSportsResults(["No teams found."]);
-          } else {
-            setSportsResults(data.response.map((r: any) => r.team.name));
-          }
-        } else {
-          setSportsResults([]);
+        if (data?.response) {
+          setSportsResults(data.response.map((r: any) => ({
+            id: r.team.id,
+            name: r.team.name,
+            logo: r.team.logo
+          })));
         }
       } catch (e: any) {
         console.warn("Sports search failed:", e);
-        setSportsResults([`Search Interrupted: ${e.message}`]);
       } finally { setIsSearching(false); }
     }, 500);
   }, [config.apiKeys.sports]);
@@ -356,58 +330,40 @@ export default function Wizard({ onComplete }: WizardProps) {
                 </div>
               )}
 
-              {config.enabledWidgets.newsFeed && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <Label className="text-base font-semibold">Interest Topics (GNews)</Label>
-                    <AutocompletePillInput 
-                      options={GNEWS_TOPICS}
-                      values={config.newsTopics}
-                      onChange={(vals) => setConfig(c => ({ ...c, newsTopics: vals }))}
-                      placeholder="Select topics..."
-                    />
-                  </div>
-                  <div className="space-y-4">
-                    <Label className="text-base font-semibold">Feed Language (Supports Multi)</Label>
-                    <AutocompletePillInput 
-                      options={GNEWS_LANGUAGES}
-                      values={config.newsLanguages}
-                      onChange={(vals) => setConfig(c => ({ ...c, newsLanguages: vals }))}
-                      placeholder="Select languages..."
-                      isMulti={true}
-                    />
-                  </div>
+              {config.enabledWidgets.sports && (
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">Sports Teams (API-Football)</Label>
+                  <AutocompletePillInput 
+                    options={sportsResults.map(t => t.name)}
+                    values={config.sportsTeams.map(t => t.name)}
+                    onSearch={fetchSports}
+                    isLoading={isSearching}
+                    onChange={(vals) => {
+                      const selectedNames = vals;
+                      const newTeams = sportsResults.filter(t => selectedNames.includes(t.name));
+                      // Keep already selected teams that weren't in the search results
+                      const existingTeams = config.sportsTeams.filter(t => selectedNames.includes(t.name));
+                      const combined = Array.from(new Map([...existingTeams, ...newTeams].map(t => [t.id, t])).values());
+                      setConfig(c => ({ ...c, sportsTeams: combined }));
+                    }}
+                    placeholder={config.apiKeys.sports ? "Search teams..." : "Add Sports API Key first"}
+                  />
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {config.enabledWidgets.market && (
-                  <div className="space-y-4">
-                    <Label className="text-base font-semibold">Market Tickers (Global)</Label>
-                    <AutocompletePillInput 
-                      options={stockResults}
-                      values={config.stocks}
-                      onSearch={fetchStocks}
-                      isLoading={isSearching}
-                      onChange={(vals) => setConfig(c => ({ ...c, stocks: vals }))}
-                      placeholder="Search tickers (e.g. AAPL, THYAO.IS)..."
-                    />
-                  </div>
-                )}
-                {config.enabledWidgets.sports && (
-                  <div className="space-y-4">
-                    <Label className="text-base font-semibold">Sports Teams (API-Football)</Label>
-                    <AutocompletePillInput 
-                      options={sportsResults}
-                      values={config.sportsTeams}
-                      onSearch={fetchSports}
-                      isLoading={isSearching}
-                      onChange={(vals) => setConfig(c => ({ ...c, sportsTeams: vals }))}
-                      placeholder={config.apiKeys.sports ? "Search teams..." : "Add Sports API Key first"}
-                    />
-                  </div>
-                )}
-              </div>
+              {config.enabledWidgets.market && (
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">Market Tickers (Global)</Label>
+                  <AutocompletePillInput 
+                    options={stockResults}
+                    values={config.stocks}
+                    onSearch={fetchStocks}
+                    isLoading={isSearching}
+                    onChange={(vals) => setConfig(c => ({ ...c, stocks: vals }))}
+                    placeholder="Search tickers (e.g. AAPL, THYAO.IS)..."
+                  />
+                </div>
+              )}
 
               {config.enabledWidgets.bookmarks && (
                 <div className="space-y-4 pt-4 border-t">

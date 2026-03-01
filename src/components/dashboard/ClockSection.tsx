@@ -28,7 +28,7 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
   }, []);
 
   useEffect(() => {
-    // Select a random Easter Egg on mount or config change
+    // Select a random Easter Egg on mount
     const selected = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
     setGreetingText(selected);
 

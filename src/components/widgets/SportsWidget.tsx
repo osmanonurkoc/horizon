@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, ArrowRight, ShieldCheck, Loader2, AlertCircle, History, Timer } from "lucide-react";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { cachedFetch } from "@/lib/api-fetcher";
 import { cn } from "@/lib/utils";
 
 interface TeamResult {
@@ -17,7 +16,36 @@ interface TeamResult {
   date: string;
 }
 
-const SPORTS_CACHE_EXPIRY = 10 * 60 * 1000; // 10 minutes
+// Single Fetch Strategy with Caching
+async function fetchTeamFixtures(teamId: number, apiKey: string) {
+  const cacheKey = `sports_fixtures_widget_${teamId}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    const { data, timestamp } = JSON.parse(cached);
+    if (Date.now() - timestamp < 300000) return data; // 5 min cache
+  }
+
+  const month = new Date().getMonth();
+  const year = new Date().getFullYear();
+  const season = month < 7 ? year - 1 : year;
+
+  const url = `https://corsproxy.io/?https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+  
+  try {
+    const res = await fetch(url, { headers: { "x-apisports-key": apiKey } });
+    const json = await res.json();
+    
+    if (json.errors && Object.keys(json.errors).length > 0) {
+      throw new Error(Object.values(json.errors)[0] as string);
+    }
+    
+    localStorage.setItem(cacheKey, JSON.stringify({ data: json.response, timestamp: Date.now() }));
+    return json.response;
+  } catch (e) {
+    console.error("Sports Widget Fetch Error:", e);
+    return [];
+  }
+}
 
 export function SportsWidget({ config }: { config: DiscoverConfig }) {
   const [results, setResults] = useState<TeamResult[]>([]);
@@ -34,67 +62,48 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     setError(null);
     try {
       const teamResults = await Promise.all(
-        config.sportsTeams.map(async (teamName) => {
-          return cachedFetch(
-            `sports_v21_${teamName.replace(/\s+/g, '_')}`,
-            async () => {
-              try {
-                // Sanitize team name for API-Football (alpha-numeric and spaces only)
-                const sanitizedTeamName = teamName.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-                if (!sanitizedTeamName) return null;
+        config.sportsTeams.map(async (team) => {
+          const fixtures = await fetchTeamFixtures(team.id, config.apiKeys.sports);
+          if (!fixtures || fixtures.length === 0) return null;
 
-                // 1. Search Team
-                const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(sanitizedTeamName)}`, {
-                  headers: { "x-apisports-key": config.apiKeys.sports }
-                });
-                if (!searchRes.ok) throw new Error(`HTTP Error ${searchRes.status}`);
-                
-                const searchJson = await searchRes.json();
-                
-                // Intercept API-Football Errors
-                if (searchJson.errors && Object.keys(searchJson.errors).length > 0) {
-                  const apiError = Object.values(searchJson.errors)[0] as string;
-                  console.warn("API-Football Widget Error:", apiError);
-                  throw new Error(apiError);
-                }
-
-                const teamId = searchJson.response?.[0]?.team?.id;
-                if (!teamId) return null;
-
-                // 2. Get Last 5 Fixtures
-                const fixturesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&last=5`, {
-                  headers: { "x-apisports-key": config.apiKeys.sports }
-                });
-                if (!fixturesRes.ok) return null;
-                const fixturesJson = await fixturesRes.json();
-                
-                if (fixturesJson.errors && Object.keys(fixturesJson.errors).length > 0) {
-                  throw new Error(Object.values(fixturesJson.errors)[0] as string);
-                }
-                
-                if (!fixturesJson?.response || fixturesJson.response.length === 0) return null;
-                
-                const lastMatch = fixturesJson.response[0];
-                const isHome = lastMatch.teams.home.id === teamId;
-                const opponent = isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name;
-                const score = `${lastMatch.goals.home ?? 0} - ${lastMatch.goals.away ?? 0}`;
-                const status = lastMatch.fixture.status.short;
-
-                return {
-                  teamName: isHome ? lastMatch.teams.home.name : lastMatch.teams.away.name,
-                  lastScore: score,
-                  opponent: opponent,
-                  isLive: status !== 'FT' && status !== 'NS' && status !== 'CANC',
-                  status: status,
-                  date: new Date(lastMatch.fixture.date).toLocaleDateString()
-                } as TeamResult;
-              } catch (e: any) {
-                console.warn(`Sports fetch skip for ${teamName}:`, e.message);
-                return null;
-              }
-            },
-            SPORTS_CACHE_EXPIRY
+          const now = Math.floor(Date.now() / 1000);
+          
+          // Check for LIVE
+          const liveMatch = fixtures.find((f: any) => 
+            ['1H', '2H', 'HT', 'ET', 'P', 'BT'].includes(f.fixture.status.short)
           );
+
+          if (liveMatch) {
+            const isHome = liveMatch.teams.home.id === team.id;
+            return {
+              teamName: team.name,
+              lastScore: `${liveMatch.goals.home} - ${liveMatch.goals.away}`,
+              opponent: isHome ? liveMatch.teams.away.name : liveMatch.teams.home.name,
+              isLive: true,
+              status: liveMatch.fixture.status.elapsed + "'",
+              date: new Date(liveMatch.fixture.date).toLocaleDateString()
+            };
+          }
+
+          // Otherwise get the most recent finished match
+          const finishedMatches = fixtures
+            .filter((f: any) => f.fixture.status.short === 'FT' || f.fixture.status.short === 'AET' || f.fixture.status.short === 'PEN')
+            .sort((a: any, b: any) => b.fixture.timestamp - a.fixture.timestamp);
+
+          if (finishedMatches.length > 0) {
+            const lastMatch = finishedMatches[0];
+            const isHome = lastMatch.teams.home.id === team.id;
+            return {
+              teamName: team.name,
+              lastScore: `${lastMatch.goals.home} - ${lastMatch.goals.away}`,
+              opponent: isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name,
+              isLive: false,
+              status: 'FT',
+              date: new Date(lastMatch.fixture.date).toLocaleDateString()
+            };
+          }
+
+          return null;
         })
       );
 
@@ -167,7 +176,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
             )) : (
               <div className="py-10 text-center space-y-2">
                 <Trophy className="w-8 h-8 mx-auto text-muted-foreground/30" />
-                <p className="text-sm font-bold text-muted-foreground">No recent match signals for your teams.</p>
+                <p className="text-sm font-bold text-muted-foreground">No match signals for your teams.</p>
               </div>
             )}
           </CardContent>
@@ -177,18 +186,18 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline font-bold">Stadium Insights</DialogTitle>
           <DialogDescription>
-            Live scores and verified historical performance for your followed teams via API-Football.
+            Live scores and verified historical performance via API-Football.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-6">
           <div className="p-6 bg-secondary/5 rounded-3xl border border-secondary/10 space-y-4">
             <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4 text-secondary" /> Network Status</h4>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Global stadium data is refreshed every 10 minutes. Live indicators will automatically activate during match time.
+              Global stadium data is cached for 5 minutes. Live indicators will automatically activate during match time.
             </p>
           </div>
           <div className="space-y-3">
-            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Historical Stream</h4>
+            <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Recent Results</h4>
             {results.map((res, idx) => (
               <div key={idx} className="flex justify-between items-center p-4 bg-muted/20 rounded-2xl hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-3">

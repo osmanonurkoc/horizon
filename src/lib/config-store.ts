@@ -1,5 +1,11 @@
 import { type PersonalizedBriefingInput } from "@/ai/flows/personalized-briefing";
 
+export interface SportsTeam {
+  id: number;
+  name: string;
+  logo: string;
+}
+
 export interface DiscoverConfig {
   theme: 'latte' | 'mocha';
   layout: 'single' | 'double';
@@ -13,7 +19,7 @@ export interface DiscoverConfig {
   newsTopics: string[];
   newsLanguages: string[];
   stocks: string[];
-  sportsTeams: string[];
+  sportsTeams: SportsTeam[];
   bookmarks: { name: string; url: string }[];
   enabledWidgets: {
     search: boolean;
@@ -65,7 +71,8 @@ export function getConfig(): DiscoverConfig {
   const stored = localStorage.getItem(CONFIG_KEY);
   if (!stored) return DEFAULT_CONFIG;
   try {
-    return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+    const parsed = JSON.parse(stored);
+    return { ...DEFAULT_CONFIG, ...parsed };
   } catch {
     return DEFAULT_CONFIG;
   }
@@ -75,7 +82,6 @@ export function saveConfig(config: DiscoverConfig) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
   
-  // Apply theme class globally
   if (config.theme === 'mocha') {
     document.documentElement.classList.add('dark');
   } else {
@@ -94,6 +100,6 @@ export function convertConfigToBriefingInput(config: DiscoverConfig): Personaliz
     location: config.location,
     newsTopics: config.newsTopics,
     stocks: config.stocks,
-    sportsTeams: config.sportsTeams,
+    sportsTeams: config.sportsTeams.map(t => t.name),
   };
 }
