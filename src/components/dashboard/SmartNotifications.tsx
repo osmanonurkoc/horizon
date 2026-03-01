@@ -19,7 +19,8 @@ interface Insight {
 // Single Fetch Strategy with Caching and Server Action
 async function getFixturesCached(teamId: number, apiKey: string) {
   const cacheKey = `sports_fixtures_v2_${teamId}`;
-  const cached = localStorage.getItem(cacheKey);
+  const cached = typeof window !== 'undefined' ? localStorage.getItem(cacheKey) : null;
+  
   if (cached) {
     try {
       const { data, timestamp } = JSON.parse(cached);
@@ -35,7 +36,9 @@ async function getFixturesCached(teamId: number, apiKey: string) {
 
   try {
     const response = await fetchSportsAction(`fixtures?team=${teamId}&season=${season}`, apiKey);
-    localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(cacheKey, JSON.stringify({ data: response, timestamp: Date.now() }));
+    }
     return response;
   } catch (e) {
     console.warn(`Sports Insight Fetch Error for team ${teamId}:`, e);
@@ -58,7 +61,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           const forecast = await cachedFetch(
             `insight_weather_v2_${config.location}`,
             async () => {
-              const url = `https://corsproxy.io/?https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
+              const url = `https://api.openweathermap.org/data/2.5/forecast?q=${config.location}&appid=${config.apiKeys.weather}&units=metric&cnt=8`;
               const res = await fetch(url);
               return res.ok ? await res.json() : null;
             },
@@ -149,7 +152,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           const marketInsight = await cachedFetch(
             `insight_market_v2_${symbol}`,
             async () => {
-              const url = `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`)}`;
+              const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`)}`;
               const res = await fetch(url);
               return res.ok ? await res.json() : null;
             },

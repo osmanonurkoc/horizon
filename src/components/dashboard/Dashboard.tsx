@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
@@ -23,7 +22,7 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
   useEffect(() => {
     const interval = setInterval(() => {
       setAutoRefreshKey(prev => prev + 1);
-    }, 2 * 60 * 60 * 1000); // 7,200,000ms
+    }, 2 * 60 * 60 * 1000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -45,7 +44,6 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
   const renderWidget = (name: string) => {
     if (!config.enabledWidgets[name as keyof DiscoverConfig['enabledWidgets']]) return null;
 
-    // Use combined key for auto-refreshing widgets
     const widgetKey = `${name}-${refreshKey}-${autoRefreshKey}`;
 
     switch (name) {
@@ -62,7 +60,6 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
     <div className="min-h-screen bg-background pb-20 selection:bg-primary/30 transition-colors duration-500">
       {/* Header Utilities */}
       <div className="fixed top-6 right-6 z-50 flex gap-3">
-        {/* Global Refresh Button */}
         <Button 
           variant="outline" 
           size="icon" 
@@ -108,7 +105,6 @@ export default function Dashboard({ config, onOpenSettings }: { config: Discover
             <h3 className="text-2xl font-headline font-black mb-6 flex items-center gap-3">
               Deep Dive <span className="text-muted-foreground font-normal text-sm uppercase tracking-widest">Global Updates</span>
             </h3>
-            {/* News feed only refreshes manually */}
             <NewsFeed key={`news-${refreshKey}`} config={config} />
           </div>
         )}
