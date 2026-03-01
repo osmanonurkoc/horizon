@@ -38,7 +38,7 @@ export function AutocompletePillInput({
   isMulti = true,
 }: AutocompletePillInputProps) {
   const [open, setOpen] = React.useState(false);
-  const [inputValue, setInputValue] = React.setState("");
+  const [inputValue, setInputValue] = React.useState("");
   const [options, setOptions] = React.useState<AutocompleteOption[]>([]);
   const [loading, setLoading] = React.useState(false);
 
@@ -132,9 +132,14 @@ export function AutocompletePillInput({
   }, [inputValue, searchType, apiKey, staticOptions, options.length]);
 
   const areValuesEqual = (a: any, b: any) => {
-    const isAObj = a !== null && typeof a === 'object';
-    const isBObj = b !== null && typeof b === 'object';
+    // Safety checks for null/undefined
+    if (a === null || a === undefined || b === null || b === undefined) {
+      return a === b;
+    }
+    const isAObj = typeof a === 'object';
+    const isBObj = typeof b === 'object';
     if (isAObj && isBObj) {
+      // If both are objects (sports teams), compare by ID
       return a.id === b.id;
     }
     return a === b;
