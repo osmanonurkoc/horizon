@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Pill } from "@/components/ui/pill";
 import { 
   HelpCircle, ArrowRight, ArrowLeft, Check, Plus, 
-  Download, Upload, ChevronUp, ChevronDown, Monitor, Loader2
+  Download, Upload, ChevronUp, ChevronDown, Monitor
 } from "lucide-react";
 import { 
   type DiscoverConfig, saveConfig, DEFAULT_CONFIG, getConfig, SEARCH_ENGINES, type SportsTeam 
@@ -17,10 +17,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AutocompletePillInput } from "@/components/ui/autocomplete-pill-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-
-const GNEWS_LANGUAGES = ["ar", "de", "en", "es", "fr", "he", "it", "nl", "no", "pt", "ru", "se", "tr", "zh"];
-const GNEWS_TOPICS = ["general", "world", "nation", "business", "technology", "entertainment", "sports", "science", "health"];
 
 interface WizardProps {
   onComplete: (config: DiscoverConfig) => void;
@@ -98,7 +94,6 @@ export default function Wizard({ onComplete }: WizardProps) {
 
   const fetchSports = useCallback((q: string) => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    // Sanitize input to alpha-numeric and spaces only
     const sanitizedQ = q.replace(/[^a-zA-Z0-9 ]/g, '').trim();
     if (!sanitizedQ || sanitizedQ.length < 2) return;
     
@@ -287,7 +282,7 @@ export default function Wizard({ onComplete }: WizardProps) {
                 <Label className="text-base font-semibold block mb-4">Display Priority</Label>
                 <div className="space-y-2">
                   {config.widgetOrder.map((name, idx) => (
-                    <div key={name} className="flex items-center justify-between bg-card border px-6 py-4 rounded-2xl shadow-sm group">
+                    <div key={`${name}-${idx}`} className="flex items-center justify-between bg-card border px-6 py-4 rounded-2xl shadow-sm group">
                       <div className="flex items-center gap-4">
                         <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-black text-sm">{idx + 1}</span>
                         <span className="capitalize font-bold text-lg">{name}</span>
@@ -380,7 +375,7 @@ export default function Wizard({ onComplete }: WizardProps) {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {config.bookmarks.map((b, i) => (
-                      <Pill key={i} label={b.name} onRemove={() => setConfig(c => ({ ...c, bookmarks: config.bookmarks.filter((_, idx) => idx !== i) }))} />
+                      <Pill key={`${b.name}-${i}`} label={b.name} onRemove={() => setConfig(c => ({ ...c, bookmarks: config.bookmarks.filter((_, idx) => idx !== i) }))} />
                     ))}
                   </div>
                 </div>

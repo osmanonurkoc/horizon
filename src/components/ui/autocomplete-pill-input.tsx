@@ -1,8 +1,7 @@
-
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown, Loader2, X } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -126,13 +125,12 @@ export function AutocompletePillInput({
               <div className="p-1">
                 {uniqueOptions.map((option, index) => (
                   <div
-                    key={option}
+                    key={`${option}-${index}`}
                     className={cn(
                       "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm outline-none transition-colors",
                       activeIndex === index ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
                       values.includes(option) && "text-primary font-bold"
                     )}
-                    /* Mouse selection fix: onMouseDown captures click before input blurs */
                     onMouseDown={(e) => {
                       e.preventDefault();
                       handleSelect(option);
@@ -156,8 +154,8 @@ export function AutocompletePillInput({
 
       {isMulti && values.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {values.map((val) => (
-            <Pill key={val} label={val} onRemove={() => onChange(values.filter(v => v !== val))} />
+          {values.map((val, idx) => (
+            <Pill key={`${val}-${idx}`} label={val} onRemove={() => onChange(values.filter(v => v !== val))} />
           ))}
         </div>
       )}
