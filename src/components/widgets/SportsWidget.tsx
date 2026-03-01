@@ -16,7 +16,7 @@ interface TeamResult {
   date: string;
 }
 
-// Client-side fetcher with 5-minute cache to bypass Server Action 404s
+// Client-side fetcher for sports widget - DIRECT FETCH (No Proxy)
 async function getFixturesClient(teamId: number, apiKey: string) {
   const cacheKey = `sports_fixtures_v3_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
@@ -34,6 +34,7 @@ async function getFixturesClient(teamId: number, apiKey: string) {
   const season = month < 7 ? year - 1 : year;
 
   try {
+    // API-Football supports CORS. Calling direct to resolve preflight failures.
     const url = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
     let res = await fetch(url, {
       method: 'GET',

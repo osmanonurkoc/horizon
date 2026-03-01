@@ -15,7 +15,7 @@ interface Insight {
   isLive?: boolean;
 }
 
-// Client-side sports fetcher for notifications with CORS proxy
+// Client-side sports fetcher for notifications - DIRECT FETCH (No Proxy)
 async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
   const cacheKey = `sports_insight_v2_${teamId}`;
   const cached = localStorage.getItem(cacheKey);
@@ -33,8 +33,8 @@ async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
   const season = month < 7 ? year - 1 : year;
 
   try {
-    // Using corsproxy.io to avoid preflight issues in Studio
-    const url = `https://corsproxy.io/?https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
+    // API-Football supports CORS natively. Using direct URL to avoid proxy preflight issues.
+    const url = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${season}`;
     const res = await fetch(url, {
       headers: { 
         "x-apisports-key": apiKey, 
@@ -49,7 +49,7 @@ async function fetchSportsInsightsClient(teamId: number, apiKey: string) {
       const match = errorStr.match(/to (\d{4})/);
       const fallbackSeason = match ? match[1] : '2024';
       
-      const fallbackUrl = `https://corsproxy.io/?https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${fallbackSeason}`;
+      const fallbackUrl = `https://v3.football.api-sports.io/fixtures?team=${teamId}&season=${fallbackSeason}`;
       const fallbackRes = await fetch(fallbackUrl, {
         headers: { "x-apisports-key": apiKey, "Accept": "application/json" }
       });
@@ -119,7 +119,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         }
       }
 
-      // 2. Sports Insight
+      // 2. Sports Insight (Live + Next Match)
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0 && config.apiKeys.sports) {
         try {
           let sportInsight: Insight | null = null;
