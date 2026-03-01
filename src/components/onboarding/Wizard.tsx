@@ -124,16 +124,28 @@ export default function Wizard({ onComplete }: WizardProps) {
         const res = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(q)}`, {
           headers: { "x-apisports-key": config.apiKeys.sports }
         });
-        if (!res.ok) throw new Error("API Response Error");
+        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
         const data = await res.json();
+        
+        // Handle API-Football Errors
+        if (data.errors && Object.keys(data.errors).length > 0) {
+          const errorMsg = Object.values(data.errors)[0] as string;
+          setSportsResults([`API Error: ${errorMsg}`]);
+          return;
+        }
+
         if (data?.response && Array.isArray(data.response)) {
-          setSportsResults(data.response.map((r: any) => r.team.name));
+          if (data.response.length === 0) {
+            setSportsResults(["No teams found."]);
+          } else {
+            setSportsResults(data.response.map((r: any) => r.team.name));
+          }
         } else {
           setSportsResults([]);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.warn("Sports search failed:", e);
-        setSportsResults(["Connectivity issue. Check API key."]);
+        setSportsResults([`Search Interrupted: ${e.message}`]);
       } finally { setIsSearching(false); }
     }, 500);
   }, [config.apiKeys.sports]);

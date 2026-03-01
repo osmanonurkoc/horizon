@@ -43,25 +43,38 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                 const searchRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
                   headers: { "x-apisports-key": config.apiKeys.sports }
                 });
-                if (!searchRes.ok) return null;
+                if (!searchRes.ok) throw new Error(`HTTP Error ${searchRes.status}`);
+                
                 const searchJson = await searchRes.json();
-                const teamId = searchJson.response?.[0]?.team?.id;
+                
+                // Intercept API-Football Errors
+                if (searchJson.errors && Object.keys(searchJson.errors).length > 0) {
+                  throw new Error(Object.values(searchJson.errors)[0] as string);
+                }
 
-                if (!teamId) return null;
+                const teamId = searchJson.response?.[0]?.team?.id;
+                if (!teamId) {
+                  console.warn(`Team "${teamName}" not found on API-Football.`);
+                  return null;
+                }
 
                 // 2. Get Last 5 Fixtures
                 const fixturesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${teamId}&last=5`, {
                   headers: { "x-apisports-key": config.apiKeys.sports }
                 });
                 if (!fixturesRes.ok) return null;
-                const fixturesJson = await fixturesRes.ok ? await fixturesRes.json() : null;
+                const fixturesJson = await fixturesRes.json();
+                
+                if (fixturesJson.errors && Object.keys(fixturesJson.errors).length > 0) {
+                  throw new Error(Object.values(fixturesJson.errors)[0] as string);
+                }
                 
                 if (!fixturesJson?.response || fixturesJson.response.length === 0) return null;
                 
                 const lastMatch = fixturesJson.response[0];
                 const isHome = lastMatch.teams.home.id === teamId;
                 const opponent = isHome ? lastMatch.teams.away.name : lastMatch.teams.home.name;
-                const score = `${lastMatch.goals.home} - ${lastMatch.goals.away}`;
+                const score = `${lastMatch.goals.home ?? 0} - ${lastMatch.goals.away ?? 0}`;
                 const status = lastMatch.fixture.status.short;
 
                 return {
@@ -72,9 +85,9 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                   status: status,
                   date: new Date(lastMatch.fixture.date).toLocaleDateString()
                 } as TeamResult;
-              } catch (e) {
-                console.warn(`Sports fetch error for ${teamName}:`, e);
-                return null;
+              } catch (e: any) {
+                console.error(`Sports fetch error for ${teamName}:`, e.message);
+                throw e; // Bubble up for general error handling
               }
             },
             SPORTS_CACHE_EXPIRY
@@ -82,9 +95,10 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
         })
       );
 
-      setResults(teamResults.filter((r): r is TeamResult => r !== null));
+      const validResults = teamResults.filter((r): r is TeamResult => r !== null);
+      setResults(validResults);
     } catch (err: any) {
-      setError("Sports Link Interrupted.");
+      setError(`Sports Link Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -117,7 +131,12 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
           </CardHeader>
           <CardContent className="p-6 space-y-6">
-            {results.length > 0 ? results.map((result, i) => (
+            {error ? (
+              <div className="py-10 text-center space-y-2">
+                <AlertCircle className="w-8 h-8 mx-auto text-destructive/50" />
+                <p className="text-sm font-bold text-muted-foreground">{error}</p>
+              </div>
+            ) : results.length > 0 ? results.map((result, i) => (
               <div key={i} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-secondary/10 rounded-2xl flex items-center justify-center text-secondary font-black text-xl">
@@ -144,8 +163,8 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
               </div>
             )) : (
               <div className="py-10 text-center space-y-2">
-                <AlertCircle className="w-8 h-8 mx-auto text-destructive/50" />
-                <p className="text-sm font-bold text-muted-foreground">{error || "No recent results found."}</p>
+                <Trophy className="w-8 h-8 mx-auto text-muted-foreground/30" />
+                <p className="text-sm font-bold text-muted-foreground">No recent match signals for your teams.</p>
               </div>
             )}
           </CardContent>

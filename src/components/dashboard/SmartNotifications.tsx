@@ -80,6 +80,13 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               });
               if (!searchRes.ok) continue;
               const searchData = await searchRes.json();
+              
+              // Intercept API Errors
+              if (searchData.errors && Object.keys(searchData.errors).length > 0) {
+                console.error("API-Football Search Error:", Object.values(searchData.errors)[0]);
+                continue;
+              }
+
               const teamId = searchData?.response?.[0]?.team?.id;
 
               if (teamId) {
@@ -125,7 +132,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
               }
             } catch (teamError) {
               console.warn(`Failed to fetch sports data for ${teamName}:`, teamError);
-              continue; // Try next team
+              continue; 
             }
           }
           if (sportInsight) newInsights.push(sportInsight);
