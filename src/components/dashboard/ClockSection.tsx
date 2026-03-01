@@ -13,10 +13,7 @@ const EASTER_EGGS = [
   "Another perfect day for open-source contributions.",
   "Ready to design some fresh UI themes?",
   "Boot up the pen display, it's time to draw.",
-  "Welcome back. Your dashboard is ready.",
-  "The world is waiting for your next big project.",
-  "Stay focused, stay inspired, and stay slim.",
-  "Let's make some architectural magic happen."
+  "Welcome back. Your dashboard is ready."
 ];
 
 export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfig, refreshKey?: number }) {
@@ -38,14 +35,15 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         const result = await generatePersonalizedBriefing(input);
         setBriefing(result);
       } catch (err) {
-        console.error("Failed to fetch AI briefing", err);
+        // Fallback for AI briefing error
+        setBriefing("Dashboard synchronized. Modules are up to date and ready.");
       } finally {
         setIsLoading(false);
       }
     };
     fetchBriefing();
     
-    // Pick a random Easter Egg on mount or refresh
+    // Pick a random Easter Egg on mount
     const selected = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
     setRandomGreeting(selected);
   }, [config, refreshKey]);

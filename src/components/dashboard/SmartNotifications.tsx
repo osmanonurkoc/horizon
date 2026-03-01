@@ -84,30 +84,32 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
         } catch (e) {}
       }
 
-      // 2. Sports Insight (STRICTLY for Followed Teams Only)
+      // 2. Sports Insight (STRICTLY for Followed Teams Only - NO MOCK DATA)
       if (config.enabledWidgets.sports && config.sportsTeams.length > 0) {
         try {
           const allUpcomingMatches: any[] = [];
           
           for (const teamName of config.sportsTeams) {
-            // Step 1: Get Team ID
-            const search = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
-            const team = search?.teams?.find((t: any) => 
+            // Step 1: Search for the specific team to get its ID
+            const searchData = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`);
+            
+            // Strictly match the team name from config
+            const team = searchData?.teams?.find((t: any) => 
               t.strTeam.toLowerCase() === teamName.toLowerCase() || 
               t.strAlternate?.toLowerCase() === teamName.toLowerCase()
             );
 
-            if (team) {
-              // Step 2: Get Next Events for this ID
-              const next = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${team.idTeam}`);
-              if (next?.events) {
-                allUpcomingMatches.push(...next.events);
+            if (team && team.idTeam) {
+              // Step 2: Get next events for this specific ID
+              const eventsData = await robustProxyFetch(`https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${team.idTeam}`);
+              if (eventsData?.events && eventsData.events.length > 0) {
+                allUpcomingMatches.push(...eventsData.events);
               }
             }
           }
 
           if (allUpcomingMatches.length > 0) {
-            // Step 3: Sort by absolute closest date/time
+            // Sort by closest date and time
             allUpcomingMatches.sort((a, b) => {
               const dateA = new Date(`${a.dateEvent}T${a.strTime || '00:00:00'}`);
               const dateB = new Date(`${b.dateEvent}T${b.strTime || '00:00:00'}`);
@@ -118,13 +120,13 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
             newInsights.push({
               type: 'sports',
               title: 'Next Match',
-              message: `${match.strEvent} on ${match.dateEvent} at ${match.strTime || 'TBD'} (${match.strLeague})`,
+              message: `${match.strEvent} on ${match.dateEvent} at ${match.strTime ? match.strTime.substring(0, 5) : 'TBD'} (${match.strLeague})`,
               icon: Trophy,
               color: 'red'
             });
           }
         } catch (e) {
-          console.warn("Sports insight error:", e);
+          // If fetch fails, we simply don't push the sport insight.
         }
       }
 
@@ -145,15 +147,16 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
           if (meta) {
             const price = meta.regularMarketPrice;
             const prev = meta.chartPreviousClose;
-            const diff = ((price - prev) / prev) * 100;
-            
-            newInsights.push({
-              type: 'market',
-              title: 'Portfolio Trend',
-              message: `${symbol} is currently ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% in this session.`,
-              icon: TrendingUp,
-              color: 'emerald'
-            });
+            if (price && prev) {
+              const diff = ((price - prev) / prev) * 100;
+              newInsights.push({
+                type: 'market',
+                title: 'Portfolio Trend',
+                message: `${symbol} is currently ${diff >= 0 ? 'up' : 'down'} ${Math.abs(diff).toFixed(2)}% in this session.`,
+                icon: TrendingUp,
+                color: 'emerald'
+              });
+            }
           }
         } catch (e) {}
       }
@@ -178,7 +181,7 @@ export function SmartNotifications({ config }: { config: DiscoverConfig }) {
 
   return (
     <div className="w-full max-w-6xl mx-auto px-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {insights.map((insight, idx) => {
           const Icon = insight.icon;
           const colorClass = 
