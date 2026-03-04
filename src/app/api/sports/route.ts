@@ -44,15 +44,16 @@ export async function GET(request: Request) {
         const eventsArray = data.events || data.results;
         if (eventsArray && eventsArray.length > 0) {
             // Check if the returned event actually contains the requested teamId
+            // FIXED: Using correct property names idHomeTeam and idAwayTeam
             const isValid = eventsArray.some((e: any) => 
-                String(e.idTeamHome) === String(teamId) || 
-                String(e.idTeamAway) === String(teamId)
+                String(e.idHomeTeam) === String(teamId) || 
+                String(e.idAwayTeam) === String(teamId)
             );
             
             if (!isValid) {
-                // If it's dummy data, nullify it so the frontend ignores it
-                if (endpoint === 'next') data.events = null;
-                if (endpoint === 'last') data.results = null;
+                // If it's dummy data, empty it so the frontend ignores it
+                if (endpoint === 'next') data.events = [];
+                if (endpoint === 'last') data.results = [];
             }
         }
     }

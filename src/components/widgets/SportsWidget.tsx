@@ -50,22 +50,21 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     setError(null);
     try {
       const teamResults: TeamResult[] = [];
+      const headers = { 'x-sports-key': config.apiKeys.sports || '3' };
       
       for (const team of config.sportsTeams) {
         // Fetch last match for basic result view
-        const res = await fetch(`/api/sports?endpoint=last&team=${team.id}`, {
-          headers: { "x-sports-key": config.apiKeys.sports || '3' }
-        });
+        const res = await fetch(`/api/sports?endpoint=last&team=${team.id}`, { headers });
         const data = await res.json();
         
         if (data.results && data.results.length > 0) {
           const last = data.results[0];
-          const isHome = last.idHomeTeam === team.id;
+          const isHome = String(last.idHomeTeam) === String(team.id);
           
           teamResults.push({
             teamId: team.id,
             teamName: team.name,
-            lastScore: `${last.intHomeScore || 0} - ${last.intAwayScore || 0}`,
+            lastScore: `${last.intHomeScore ?? 0} - ${last.intAwayScore ?? 0}`,
             opponent: isHome ? last.strAwayTeam : last.strHomeTeam,
             isLive: last.strStatus === 'InProgress',
             status: last.strStatus === 'FT' ? 'Finished' : last.strStatus,
@@ -76,21 +75,22 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
       }
 
       setResults(teamResults);
-      if (teamResults.length > 0) setSelectedTeam(teamResults[0]);
+      if (teamResults.length > 0 && !selectedTeam) {
+        setSelectedTeam(teamResults[0]);
+      }
     } catch (err: any) {
       setError(`Stadium Link Interrupted.`);
     } finally {
       setLoading(false);
     }
-  }, [config.sportsTeams, config.apiKeys.sports]);
+  }, [config.sportsTeams, config.apiKeys.sports, selectedTeam]);
 
-  const fetchStandings = async (leagueId: string) => {
+  const fetchStandings = useCallback(async (leagueId: string) => {
     if (!leagueId) return;
     setStandingsLoading(true);
     try {
-      const res = await fetch(`/api/sports?endpoint=standings&league=${leagueId}`, {
-        headers: { "x-sports-key": config.apiKeys.sports || '3' }
-      });
+      const headers = { 'x-sports-key': config.apiKeys.sports || '3' };
+      const res = await fetch(`/api/sports?endpoint=standings&league=${leagueId}`, { headers });
       const data = await res.json();
       setStandings(data.table || []);
     } catch (e) {
@@ -98,7 +98,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     } finally {
       setStandingsLoading(false);
     }
-  };
+  }, [config.apiKeys.sports]);
 
   useEffect(() => {
     fetchSportsData();
@@ -108,7 +108,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     if (selectedTeam?.leagueId) {
       fetchStandings(selectedTeam.leagueId);
     }
-  }, [selectedTeam]);
+  }, [selectedTeam, fetchStandings]);
 
   if (config.sportsTeams.length === 0) {
     return (
@@ -122,7 +122,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
     );
   }
 
-  if (loading) return <div className="h-48 rounded-3xl-card animate-skeleton bg-muted/40" />;
+  if (loading && results.length === 0) return <div className="h-48 rounded-3xl-card animate-skeleton bg-muted/40" />;
 
   return (
     <Dialog>

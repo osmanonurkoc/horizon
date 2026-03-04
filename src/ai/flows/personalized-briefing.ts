@@ -113,8 +113,9 @@ async function getSportsSummary(teams: any[], apiKey: string): Promise<string | 
     const teamName = typeof team === 'object' ? team.name : team;
     
     // BLACKLIST VERIFICATION HELPER
+    // FIXED: Corrected property names from idTeamHome to idHomeTeam and idAwayTeam
     const isRealEvent = (event: any) => {
-        return String(event.idTeamHome) === String(teamId) || String(event.idTeamAway) === String(teamId) ||
+        return String(event.idHomeTeam) === String(teamId) || String(event.idAwayTeam) === String(teamId) ||
                event.strHomeTeam === teamName || event.strAwayTeam === teamName;
     };
 
