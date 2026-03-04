@@ -8,8 +8,8 @@ Built with **Next.js 15**, **React 19**, and **Genkit AI**, Personal Horizon fol
 
 ## 🚀 Key Features
 
-### 🤖 AI Executive Briefing
-Powered by **Genkit** and **Gemini 2.5 Flash**, the dashboard generates a strictly functional, 2-3 sentence summary of your day. It analyzes your enabled widgets to highlight imminent rain, portfolio movements, and upcoming match kickoffs.
+### 🤖 At a Glance
+It analyzes your enabled widgets to highlight imminent rain, portfolio movements, and upcoming match kickoffs. And shows brief greetings text.
 
 ### 📊 Professional Widget Suite
 - **Weather Hub**: Real-time conditions and 5-day outlook via OpenWeather.
