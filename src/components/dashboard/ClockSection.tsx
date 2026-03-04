@@ -16,7 +16,6 @@ const EASTER_EGGS = [
   "Let's see what the world has in store for you.",
   "Everything you need, right at your fingertips.",
   "Stay curious, stay inspired.",
-  "Wishing you focus and clarity for the hours ahead.",
   "Remember to celebrate the little wins today.",
   "Your daily digest, served fresh.",
   "Take things one step at a time.",
@@ -45,6 +44,8 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
   }, []);
 
   useEffect(() => {
+    let ignore = false; // Cleanup flag to prevent race conditions
+
     // Select greeting and message on mount to avoid hydration mismatch
     const greeting = getTimeGreeting();
     const message = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
@@ -57,15 +58,31 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
       try {
         const input = convertConfigToBriefingInput(config);
         const result = await generatePersonalizedBriefing(input);
-        setBriefing(result);
+        
+        // Only update state if this effect execution is still current
+        if (!ignore) {
+          setBriefing(result);
+        }
       } catch (err) {
-        setBriefing("Dashboard synchronized. Your personalized modules are up to date.");
+        if (!ignore) {
+          setBriefing("Dashboard synchronized. Your personalized modules are up to date.");
+        }
       } finally {
-        setIsLoading(false);
+        if (!ignore) {
+          setIsLoading(false);
+        }
       }
     };
+
     fetchBriefing();
-  }, [config, refreshKey]);
+
+    return () => {
+      // Mark as ignored if the effect re-fires or unmounts before the fetch completes
+      ignore = true; 
+    };
+    // Use JSON.stringify for config to ensure we only re-run on value changes, not reference changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(config), refreshKey]);
 
   return (
     <div className="py-12 px-6 flex flex-col items-center text-center">
