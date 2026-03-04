@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 /**
  * Server-side proxy for TheSportsDB to bypass client-side CORS restrictions.
  * Supports team search, fixture lookup (last/next), and league standings.
+ * Includes a dummy data interceptor to filter out inaccurate results from free tier.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -35,6 +36,27 @@ export async function GET(request: Request) {
     if (!res.ok) throw new Error(`External API returned ${res.status}`);
     
     const data = await res.json();
+
+    // BLACKLIST INTERCEPTOR
+    // TheSportsDB free key '3' often returns dummy data (e.g. Wycombe Wanderers)
+    // if a team is not found or supported. We filter these out.
+    if ((endpoint === 'next' || endpoint === 'last') && teamId) {
+        const eventsArray = data.events || data.results;
+        if (eventsArray && eventsArray.length > 0) {
+            // Check if the returned event actually contains the requested teamId
+            const isValid = eventsArray.some((e: any) => 
+                String(e.idTeamHome) === String(teamId) || 
+                String(e.idTeamAway) === String(teamId)
+            );
+            
+            if (!isValid) {
+                // If it's dummy data, nullify it so the frontend ignores it
+                if (endpoint === 'next') data.events = null;
+                if (endpoint === 'last') data.results = null;
+            }
+        }
+    }
+
     return NextResponse.json(data);
   } catch (error: any) {
     console.error("TheSportsDB Proxy Error:", error.message);

@@ -46,7 +46,7 @@ export async function generatePersonalizedBriefing(input: PersonalizedBriefingIn
     if (marketSummary) parts.push(marketSummary);
     if (sportsSummary) parts.push(sportsSummary);
     if (newsHeadlines && newsHeadlines.length > 0) {
-      parts.push(`Top headline: ${newsHeadlines[0]}`); 
+      parts.push(newsHeadlines[0]); 
     }
 
     if (parts.length === 0) {
@@ -66,7 +66,7 @@ async function getWeatherData(location: string, apiKey: string): Promise<string 
     const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${apiKey}&units=metric`);
     const data = await res.json();
     if (data.weather && data.main) {
-      return `Current weather in ${location}: ${data.weather[0].description}, Temp: ${Math.round(data.main.temp)}°C.`;
+      return `It's currently ${Math.round(data.main.temp)}°C with ${data.weather[0].description} in ${location}.`;
     }
   } catch (e) { return undefined; }
   return undefined;
@@ -79,7 +79,7 @@ async function getNewsHeadlines(topics: any[], apiKey: string): Promise<string[]
     const res = await fetch(`https://gnews.io/api/v4/top-headlines?category=${topicVal}&lang=en&max=1&apikey=${apiKey}`);
     const data = await res.json();
     if (data.articles && data.articles.length > 0) {
-      return data.articles.map((a: any) => a.title);
+      return [`Today's top headline: "${data.articles[0].title}."`];
     }
   } catch(e) { return undefined; }
   return undefined;
@@ -98,7 +98,8 @@ async function getMarketSummary(stocks: any[]): Promise<string | undefined> {
     if (meta && meta.regularMarketPrice && meta.chartPreviousClose) {
       const price = meta.regularMarketPrice;
       const diff = ((price - meta.chartPreviousClose) / meta.chartPreviousClose) * 100;
-      return `${parsedSymbol} is trading at ${price.toFixed(2)} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)}% today).`;
+      const direction = diff >= 0 ? 'up' : 'down';
+      return `In the market, ${parsedSymbol} is trading at $${price.toFixed(2)} (${direction} ${Math.abs(diff).toFixed(2)}% today).`;
     }
   } catch(e) { return undefined; }
   return undefined;
@@ -111,17 +112,26 @@ async function getSportsSummary(teams: any[], apiKey: string): Promise<string | 
     const teamId = typeof team === 'object' ? team.id : team;
     const teamName = typeof team === 'object' ? team.name : team;
     
+    // BLACKLIST VERIFICATION HELPER
+    const isRealEvent = (event: any) => {
+        return String(event.idTeamHome) === String(teamId) || String(event.idTeamAway) === String(teamId) ||
+               event.strHomeTeam === teamName || event.strAwayTeam === teamName;
+    };
+
     let res = await fetch(`https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsnext.php?id=${teamId}`);
     let data = await res.json();
-    if (data.events && data.events.length > 0) {
+    if (data.events && data.events.length > 0 && isRealEvent(data.events[0])) {
        const next = data.events[0];
-       return `${teamName} plays ${next.strAwayTeam === teamName ? next.strHomeTeam : next.strAwayTeam} on ${next.dateEvent}.`;
+       const opponent = next.strAwayTeam === teamName ? next.strHomeTeam : next.strAwayTeam;
+       return `For sports, ${teamName} will face ${opponent} on ${next.dateEvent}.`;
     }
+
     res = await fetch(`https://www.thesportsdb.com/api/v1/json/${apiKey}/eventslast.php?id=${teamId}`);
     data = await res.json();
-    if (data.results && data.results.length > 0) {
+    if (data.results && data.results.length > 0 && isRealEvent(data.results[0])) {
        const last = data.results[0];
-       return `${teamName} latest result: ${last.strHomeTeam} ${last.intHomeScore} - ${last.intAwayScore} ${last.strAwayTeam}.`;
+       const opponent = last.strAwayTeam === teamName ? last.strHomeTeam : last.strAwayTeam;
+       return `In recent sports, ${teamName} finished ${last.intHomeScore}-${last.intAwayScore} against ${opponent}.`;
     }
   } catch(e) { return undefined; }
   return undefined;
