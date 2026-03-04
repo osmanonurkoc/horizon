@@ -18,7 +18,7 @@ interface AutocompleteOption {
 
 interface AutocompletePillInputProps {
   searchType: 'location' | 'stock' | 'sport' | 'static';
-  staticOptions?: { label: string; value: any }[];
+  staticOptions?: any[];
   apiKey?: string;
   values: any[];
   onChange: (values: any[]) => void;
@@ -26,7 +26,7 @@ interface AutocompletePillInputProps {
   isMulti?: boolean;
 }
 
-const EMPTY_STATIC_OPTIONS: { label: string; value: any }[] = [];
+const EMPTY_STATIC_OPTIONS: any[] = [];
 
 export function AutocompletePillInput({
   searchType,
@@ -77,10 +77,22 @@ export function AutocompletePillInput({
 
     if (searchType === 'static') {
       const filtered = staticOptions
-        .filter(opt => opt.label.toLowerCase().includes(inputValue.toLowerCase()))
-        .map(opt => ({ label: opt.label, value: opt.value }));
+        .filter(opt => {
+          const textToSearch = typeof opt === 'object' ? String(opt.label || opt.value || '') : String(opt);
+          return textToSearch.toLowerCase().includes(inputValue.toLowerCase());
+        })
+        .map(opt => {
+          if (typeof opt === 'object') {
+            return { label: opt.label, value: opt.value, logo: opt.logo };
+          }
+          return { label: String(opt), value: opt };
+        });
       
-      setOptions(filtered);
+      setOptions(prev => {
+        const isSame = prev.length === filtered.length && 
+                      prev.every((v, i) => v.value === filtered[i].value);
+        return isSame ? prev : filtered;
+      });
       return;
     }
 
@@ -168,8 +180,9 @@ export function AutocompletePillInput({
     if (staticOpt) return staticOpt.label;
 
     if (typeof val === 'object') {
-      if ('name' in val) return val.name;
       if ('label' in val) return val.label;
+      if ('name' in val) return val.name;
+      if ('value' in val) return val.value;
       return val.id || JSON.stringify(val);
     }
     
