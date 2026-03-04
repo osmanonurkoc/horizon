@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, ArrowRight, AlertCircle, History, Table as TableIcon, Loader2 } from "lucide-react";
-import { type DiscoverConfig, type SportsTeam } from "@/lib/config-store";
+import { Trophy, ArrowRight, AlertCircle, Table as TableIcon, Loader2, Calendar } from "lucide-react";
+import { type DiscoverConfig } from "@/lib/config-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 interface TeamResult {
   teamId: string;
   teamName: string;
+  logo?: string;
   lastScore: string;
   opponent: string;
   isLive: boolean;
@@ -58,18 +59,27 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
         const data = await res.json();
         
         if (data.results && data.results.length > 0) {
-          const last = data.results[0];
-          const isHome = String(last.idHomeTeam) === String(team.id);
+          const lastMatch = data.results[0];
+          const teamId = team.id;
+          
+          // Determine if the user's team is Home or Away
+          const isHome = String(lastMatch.idHomeTeam) === String(teamId) || String(lastMatch.idTeamHome) === String(teamId);
+          
+          // DYNAMIC EXTRACTION: Pull names and badges directly from the live API response
+          const liveName = isHome ? lastMatch.strHomeTeam : lastMatch.strAwayTeam;
+          const liveLogo = isHome ? lastMatch.strHomeTeamBadge : lastMatch.strAwayTeamBadge;
+          const opponentName = isHome ? lastMatch.strAwayTeam : lastMatch.strHomeTeam;
           
           teamResults.push({
             teamId: team.id,
-            teamName: team.name,
-            lastScore: `${last.intHomeScore ?? 0} - ${last.intAwayScore ?? 0}`,
-            opponent: isHome ? last.strAwayTeam : last.strHomeTeam,
-            isLive: last.strStatus === 'InProgress',
-            status: last.strStatus === 'FT' ? 'Finished' : last.strStatus,
-            date: last.dateEvent,
-            leagueId: last.idLeague
+            teamName: liveName || team.name || "Unknown",
+            logo: liveLogo, // Push the dynamically fetched logo
+            lastScore: `${lastMatch.intHomeScore ?? 0} - ${lastMatch.intAwayScore ?? 0}`,
+            opponent: opponentName,
+            isLive: lastMatch.strStatus === 'InProgress',
+            status: lastMatch.strStatus === 'FT' ? 'Finished' : lastMatch.strStatus,
+            date: new Date(lastMatch.dateEvent).toLocaleDateString(),
+            leagueId: lastMatch.idLeague
           });
         }
       }
@@ -132,28 +142,37 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
             <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-bold">Stadium Central</CardTitle>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
           </CardHeader>
-          <CardContent className="p-6 space-y-6">
+          <CardContent className="p-6 space-y-4">
             {error ? (
               <div className="py-10 text-center space-y-2 text-destructive">
                 <AlertCircle className="w-8 h-8 mx-auto opacity-50" />
                 <p className="text-sm font-bold">{error}</p>
               </div>
-            ) : results.length > 0 ? results.map((result, i) => (
-              <div key={i} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-secondary/10 rounded-2xl flex items-center justify-center text-secondary font-black text-xl">
-                    {result.teamName[0]}
-                  </div>
+            ) : results.length > 0 ? results.map((res, i) => (
+              <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted/50 transition-colors cursor-pointer">
+                <div className="flex items-center gap-3">
+                  {/* Dynamically Render Logo or Fallback */}
+                  {res.logo ? (
+                    <img src={res.logo} alt={res.teamName} className="w-8 h-8 object-contain drop-shadow-sm" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary uppercase">
+                      {res.teamName ? res.teamName[0] : '?'}
+                    </div>
+                  )}
                   <div>
-                    <p className="font-black font-headline text-lg group-hover:text-primary transition-colors">{result.teamName}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">vs {result.opponent}</p>
+                    <h4 className="font-bold text-sm">{res.teamName}</h4>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Calendar className="w-3 h-3" /> {res.date}
+                    </p>
                   </div>
                 </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter bg-muted mb-1">
-                    {result.status}
-                  </span>
-                  <p className="text-xl font-black tabular-nums">{result.lastScore}</p>
+                <div className="text-right">
+                  <div className="font-mono font-bold text-lg tracking-tighter">
+                    {res.lastScore}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-medium">
+                    vs {res.opponent}
+                  </div>
                 </div>
               </div>
             )) : (
@@ -182,9 +201,13 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                       : "hover:bg-primary/10 text-muted-foreground"
                   )}
                 >
-                  <div className="w-8 h-8 rounded-full bg-background/20 flex items-center justify-center text-xs">
-                    {res.teamName[0]}
-                  </div>
+                  {res.logo ? (
+                    <img src={res.logo} alt="" className="w-6 h-6 object-contain" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-background/20 flex items-center justify-center text-xs">
+                      {res.teamName[0]}
+                    </div>
+                  )}
                   {res.teamName}
                 </button>
               ))}
@@ -242,7 +265,7 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
                       >
                         <TableCell className="text-center font-black">{entry.intRank}</TableCell>
                         <TableCell className="flex items-center gap-3 py-4">
-                          {entry.strTeamBadge && <img src={entry.strTeamBadge} alt="" className="w-6 h-6" />}
+                          {entry.strTeamBadge && <img src={entry.strTeamBadge} alt="" className="w-6 h-6 object-contain" />}
                           {entry.strTeam}
                         </TableCell>
                         <TableCell className="text-center font-medium">{entry.intPlayed}</TableCell>
