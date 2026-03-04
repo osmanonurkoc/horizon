@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { type DiscoverConfig } from "@/lib/config-store";
 import { cachedFetch, EXPIRY_TIMES } from "@/lib/api-fetcher";
 import Image from "next/image";
-import { AlertCircle, RefreshCw, ExternalLink, Loader2 } from "lucide-react";
+import { AlertCircle, RefreshCw, ExternalLink, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchGNewsAction } from "@/app/actions/news";
 
@@ -37,7 +37,6 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     setError(null);
 
     try {
-      // If multiple topics are selected, we search for them. If one, it might be a category.
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
       const languages = config.newsLanguages.length > 0 ? config.newsLanguages : ['en'];
       const country = config.newsCountry || 'any';
@@ -53,7 +52,17 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       );
 
       const results = await Promise.all(languageRequests);
-      const combinedArticles: Article[] = results.flat();
+      
+      // Check for errors in any of the results (e.g. Quota Exceeded)
+      const errorResult = results.find(r => r.error);
+      if (errorResult) {
+        setError(errorResult.error);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
+      const combinedArticles: Article[] = results.flatMap(r => r.articles);
 
       if (combinedArticles.length === 0) {
         if (pageNum === 1) setHasMore(false);
@@ -123,7 +132,13 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
       <Card className="rounded-3xl-card border-none p-12 text-center bg-destructive/5">
         <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4 opacity-50" />
         <h4 className="text-xl font-headline font-bold mb-2 text-destructive">Deep Dive Interrupted</h4>
-        <p className="text-muted-foreground mb-6 max-w-md mx-auto">{error}</p>
+        <div className="p-4 mb-6 text-sm text-destructive-foreground bg-destructive/10 rounded-lg border border-destructive/20 text-left max-w-md mx-auto">
+          <h3 className="font-bold flex items-center gap-2 mb-1">
+            <AlertTriangle className="w-4 h-4" />
+            API Limit Reached
+          </h3>
+          <p className="opacity-80">{error}</p>
+        </div>
         <Button 
           variant="outline" 
           onClick={() => fetchNews(1, true)}
@@ -184,6 +199,15 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         ))}
       </div>
       
+      {error && articles.length > 0 && (
+         <div className="max-w-md mx-auto p-4 mb-4 text-sm text-destructive-foreground bg-destructive/10 rounded-lg border border-destructive/20 text-center">
+            <p className="font-bold flex items-center justify-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Horizon Limit Reached: {error}
+            </p>
+         </div>
+      )}
+
       <div ref={observerTarget} className="h-40 flex flex-col items-center justify-center">
         {loading && articles.length > 0 && (
           <div className="flex flex-col items-center gap-4 text-primary">
@@ -191,7 +215,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
             <span className="text-xs font-black uppercase tracking-[0.2em] opacity-80">Fetching deeper insights...</span>
           </div>
         )}
-        {!hasMore && articles.length > 0 && (
+        {!hasMore && !error && articles.length > 0 && (
           <div className="text-center space-y-2">
             <div className="h-px w-20 bg-border mx-auto mb-4" />
             <p className="text-muted-foreground italic text-sm font-medium">You have reached the limit of the current horizon.</p>
@@ -199,7 +223,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
         )}
       </div>
 
-      {!loading && articles.length === 0 && (
+      {!loading && articles.length === 0 && !error && (
         <div className="py-20 text-center text-muted-foreground italic font-medium">
           No signals found for your selected interests.
         </div>
