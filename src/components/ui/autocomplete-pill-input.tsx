@@ -120,21 +120,26 @@ export function AutocompletePillInput({
     return a === b;
   };
 
-  const handleSelect = (option: AutocompleteOption) => {
+  const isSelected = (optionValue: any) => {
+    return values.some(v => areValuesEqual(v, optionValue));
+  };
+
+  const handleSelect = (option: AutocompleteOption, e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    const alreadySelected = isSelected(option.value);
+
     if (isMulti) {
-      const exists = values.some(v => areValuesEqual(v, option.value));
-      if (!exists) {
+      if (!alreadySelected) {
         onChange([...values, option.value]);
       }
     } else {
       onChange([option.value]);
       setOpen(false);
     }
+    
     setInputValue("");
-  };
-
-  const isSelected = (optionValue: any) => {
-    return values.some(v => areValuesEqual(v, optionValue));
+    setOptions([]);
   };
 
   const getLabel = (val: any) => {
@@ -189,16 +194,13 @@ export function AutocompletePillInput({
                       key={`${option.label}-${index}`}
                       className={cn(
                         "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground",
-                        selected && "bg-accent/50"
+                        selected && "bg-accent/50 text-primary font-bold"
                       )}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleSelect(option);
-                      }}
+                      onMouseDown={(e) => handleSelect(option, e as any)}
                     >
                       {option.logo && <img src={option.logo} alt="" className="w-4 h-4 mr-2" />}
-                      <span className="flex-1">{option.label}</span>
-                      {selected && <Check className="w-4 h-4 ml-auto text-primary" />}
+                      <span className="flex-1 truncate">{option.label}</span>
+                      {selected && <Check className="w-4 h-4 ml-2 shrink-0" />}
                     </div>
                   );
                 })}
