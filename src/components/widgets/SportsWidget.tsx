@@ -54,34 +54,53 @@ export function SportsWidget({ config }: { config: DiscoverConfig }) {
       const headers = { 'x-sports-key': config.apiKeys.sports || '3' };
       
       for (const team of config.sportsTeams) {
-        // Fetch last match for basic result view
-        const res = await fetch(`/api/sports?endpoint=last&team=${team.id}`, { headers });
-        const data = await res.json();
+        if (!team) continue;
         
-        if (data.results && data.results.length > 0) {
-          const lastMatch = data.results[0];
-          const teamId = team.id;
+        const isObj = typeof team === 'object' && team !== null;
+        const teamId = isObj ? team.id : String(team);
+        let teamName = isObj ? team.name : undefined;
+        const teamLogo = isObj ? team.logo : undefined;
+
+        if (!teamId) continue;
+        
+        try {
+          // Fetch last match for basic result view
+          const res = await fetch(`/api/sports?endpoint=last&team=${teamId}`, { headers });
+          const data = await res.json();
           
-          // Determine if the user's team is Home or Away
-          const isHome = String(lastMatch.idHomeTeam) === String(teamId) || String(lastMatch.idTeamHome) === String(teamId);
-          
-          // DYNAMIC EXTRACTION: Pull names and badges directly from the live API response
-          const liveName = isHome ? lastMatch.strHomeTeam : lastMatch.strAwayTeam;
-          const liveLogo = isHome ? lastMatch.strHomeTeamBadge : lastMatch.strAwayTeamBadge;
-          const opponentName = isHome ? lastMatch.strAwayTeam : lastMatch.strHomeTeam;
-          
-          teamResults.push({
-            teamId: team.id,
-            teamName: liveName || team.name || "Unknown",
-            logo: liveLogo, // Push the dynamically fetched logo
-            lastScore: `${lastMatch.intHomeScore ?? 0} - ${lastMatch.intAwayScore ?? 0}`,
-            opponent: opponentName,
-            isLive: lastMatch.strStatus === 'InProgress',
-            status: lastMatch.strStatus === 'FT' ? 'Finished' : lastMatch.strStatus,
-            date: new Date(lastMatch.dateEvent).toLocaleDateString(),
-            leagueId: lastMatch.idLeague
-          });
+          if (data.results && data.results.length > 0) {
+            const lastMatch = data.results[0];
+            
+            // Determine if the user's team is Home or Away
+            const isHome = String(lastMatch.idHomeTeam) === String(teamId) || String(lastMatch.idTeamHome) === String(teamId);
+            
+            // DYNAMIC EXTRACTION: Pull names and badges directly from the live API response
+            const liveName = isHome ? lastMatch.strHomeTeam : lastMatch.strAwayTeam;
+            const liveLogo = isHome ? lastMatch.strHomeTeamBadge : lastMatch.strAwayTeamBadge;
+            const opponentName = isHome ? lastMatch.strAwayTeam : lastMatch.strHomeTeam;
+            
+            if (!teamName) {
+              teamName = liveName || "Unknown Team";
+            }
+
+            teamResults.push({
+              teamId: String(teamId),
+              teamName: teamName,
+              logo: liveLogo || teamLogo, // Live API logo takes priority
+              lastScore: `${lastMatch.intHomeScore ?? 0} - ${lastMatch.intAwayScore ?? 0}`,
+              opponent: opponentName,
+              isLive: lastMatch.strStatus === 'InProgress',
+              status: lastMatch.strStatus === 'FT' ? 'Finished' : lastMatch.strStatus,
+              date: new Date(lastMatch.dateEvent).toLocaleDateString(),
+              leagueId: lastMatch.idLeague
+            });
+          }
+        } catch (err: any) {
+          console.error("Failed to fetch team:", teamId);
         }
+
+        // CRITICAL: Reintroduce the throttle to prevent 429 Rate Limits from TheSportsDB!
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
 
       setResults(teamResults);
