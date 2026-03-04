@@ -176,13 +176,20 @@ export function AutocompletePillInput({
     
     if (isMulti) {
       const exists = values.some(v => checkEquality(v, option.value));
-      if (!exists) {
+      if (exists) {
+        // TOGGLE OFF: If it already exists, remove it from the array
+        onChange(values.filter(v => !checkEquality(v, option.value)));
+      } else {
+        // TOGGLE ON: If it doesn't exist, add it
         onChange([...values, option.value]);
       }
     } else {
+      // Single select behavior
       onChange([option.value]);
       setOpen(false);
     }
+    
+    // Clear the search input after interaction
     setInputValue("");
   };
 
