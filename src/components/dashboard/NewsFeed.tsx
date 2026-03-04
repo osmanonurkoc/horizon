@@ -37,14 +37,16 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     setError(null);
 
     try {
+      // If multiple topics are selected, we search for them. If one, it might be a category.
       const q = config.newsTopics.length > 0 ? config.newsTopics.join(' OR ') : 'general';
       const languages = config.newsLanguages.length > 0 ? config.newsLanguages : ['en'];
+      const country = config.newsCountry || 'any';
       
       const languageRequests = languages.map(lang => 
         cachedFetch(
-          `gnews_v20_${encodeURIComponent(q)}_${lang}_p${pageNum}`,
+          `gnews_v21_${encodeURIComponent(q)}_${lang}_${country}_p${pageNum}`,
           async () => {
-            return await fetchGNewsAction(q, lang, pageNum, config.apiKeys.news);
+            return await fetchGNewsAction(q, lang, country, pageNum, config.apiKeys.news);
           },
           EXPIRY_TIMES.NEWS
         )
@@ -76,7 +78,7 @@ export function NewsFeed({ config }: { config: DiscoverConfig }) {
     } finally {
       setLoading(false);
     }
-  }, [config.apiKeys.news, config.newsTopics, config.newsLanguages]);
+  }, [config.apiKeys.news, config.newsTopics, config.newsLanguages, config.newsCountry]);
 
   useEffect(() => {
     setArticles([]);

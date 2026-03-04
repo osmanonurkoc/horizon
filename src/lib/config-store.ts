@@ -18,6 +18,7 @@ export interface DiscoverConfig {
   location: string;
   newsTopics: string[];
   newsLanguages: string[];
+  newsCountry: string;
   stocks: string[];
   sportsTeams: SportsTeam[];
   bookmarks: { name: string; url: string }[];
@@ -48,8 +49,9 @@ export const DEFAULT_CONFIG: DiscoverConfig = {
   },
   searchEngine: 'https://www.google.com/search?q=',
   location: '',
-  newsTopics: [],
+  newsTopics: ['general'],
   newsLanguages: ['en'],
+  newsCountry: 'any',
   stocks: [],
   sportsTeams: [],
   bookmarks: [],

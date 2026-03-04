@@ -18,7 +18,7 @@ interface AutocompleteOption {
 
 interface AutocompletePillInputProps {
   searchType: 'location' | 'stock' | 'sport' | 'static';
-  staticOptions?: string[];
+  staticOptions?: { label: string; value: any }[];
   apiKey?: string;
   values: any[];
   onChange: (values: any[]) => void;
@@ -26,7 +26,7 @@ interface AutocompletePillInputProps {
   isMulti?: boolean;
 }
 
-const EMPTY_STATIC_OPTIONS: string[] = [];
+const EMPTY_STATIC_OPTIONS: { label: string; value: any }[] = [];
 
 export function AutocompletePillInput({
   searchType,
@@ -47,23 +47,17 @@ export function AutocompletePillInput({
   React.useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
-    if (!inputValue || inputValue.trim().length < 2) {
-      if (searchType !== 'static') {
-        if (options.length > 0) setOptions([]);
-        return;
-      }
-    }
-
     if (searchType === 'static') {
       const filtered = staticOptions
-        .filter(opt => opt.toLowerCase().includes(inputValue.toLowerCase()))
-        .map(opt => ({ label: opt, value: opt }));
+        .filter(opt => opt.label.toLowerCase().includes(inputValue.toLowerCase()))
+        .map(opt => ({ label: opt.label, value: opt.value }));
       
-      setOptions(prev => {
-        const isSame = prev.length === filtered.length && 
-                      prev.every((v, i) => v.value === filtered[i].value);
-        return isSame ? prev : filtered;
-      });
+      setOptions(filtered);
+      return;
+    }
+
+    if (!inputValue || inputValue.trim().length < 2) {
+      if (options.length > 0) setOptions([]);
       return;
     }
 
@@ -90,7 +84,6 @@ export function AutocompletePillInput({
             })));
           }
         } else if (searchType === 'sport') {
-          // Use TheSportsDB universal proxy
           const res = await fetch(`/api/sports?endpoint=search&query=${encodeURIComponent(inputValue)}`, {
             headers: { "x-sports-key": apiKey || '3' }
           });
@@ -116,14 +109,13 @@ export function AutocompletePillInput({
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [inputValue, searchType, apiKey]);
+  }, [inputValue, searchType, apiKey, staticOptions]);
 
   const areValuesEqual = (a: any, b: any) => {
-    if (!a || !b) return a === b;
-    const isAObj = typeof a === 'object';
-    const isBObj = typeof b === 'object';
-    if (isAObj && isBObj) {
-      return a.id === b.id;
+    if (a === null || b === null || a === undefined || b === undefined) return a === b;
+    if (typeof a === 'object' && typeof b === 'object') {
+      if ('id' in a && 'id' in b) return a.id === b.id;
+      if ('value' in a && 'value' in b) return a.value === b.value;
     }
     return a === b;
   };
@@ -146,7 +138,15 @@ export function AutocompletePillInput({
   };
 
   const getLabel = (val: any) => {
-    if (val && typeof val === 'object') return val.name;
+    if (!val) return "";
+    if (typeof val === 'object') {
+      if ('name' in val) return val.name;
+      const staticOpt = staticOptions.find(o => o.value === val);
+      if (staticOpt) return staticOpt.label;
+      return JSON.stringify(val);
+    }
+    const staticOpt = staticOptions.find(o => o.value === val);
+    if (staticOpt) return staticOpt.label;
     return val;
   };
 
@@ -174,11 +174,11 @@ export function AutocompletePillInput({
             {loading ? (
               <div className="py-6 flex items-center justify-center text-muted-foreground">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                <span>Searching Stadiums...</span>
+                <span>Searching...</span>
               </div>
             ) : options.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                {inputValue.length < 2 ? "Type to search..." : "No results found."}
+                {inputValue.length < 2 && searchType !== 'static' ? "Type to search..." : "No results found."}
               </div>
             ) : (
               <div className="p-1">

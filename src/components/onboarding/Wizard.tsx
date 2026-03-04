@@ -17,9 +17,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AutocompletePillInput } from "@/components/ui/autocomplete-pill-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const NEWS_TOPICS = ['Technology', 'Science', 'Business', 'Sports', 'Health', 'Entertainment'];
-const NEWS_LANGS = ['en', 'es', 'fr', 'de', 'it', 'tr'];
+import { GNEWS_CATEGORIES, GNEWS_LANGUAGES, GNEWS_COUNTRIES } from "@/lib/gnews-constants";
 
 export default function Wizard({ onComplete }: { onComplete: (config: DiscoverConfig) => void }) {
   const [step, setStep] = useState(1);
@@ -276,23 +274,45 @@ export default function Wizard({ onComplete }: { onComplete: (config: DiscoverCo
               )}
 
               {config.enabledWidgets.newsFeed && (
-                <div className="space-y-4">
-                  <Label className="text-base font-semibold">News Topics & Languages</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <AutocompletePillInput 
-                      searchType="static"
-                      staticOptions={NEWS_TOPICS}
-                      values={config.newsTopics}
-                      onChange={(vals) => setConfig(c => ({ ...c, newsTopics: vals }))}
-                      placeholder="Add topics..."
-                    />
-                    <AutocompletePillInput 
-                      searchType="static"
-                      staticOptions={NEWS_LANGS}
-                      values={config.newsLanguages}
-                      onChange={(vals) => setConfig(c => ({ ...c, newsLanguages: vals }))}
-                      placeholder="Add languages..."
-                    />
+                <div className="space-y-6">
+                  <Label className="text-base font-semibold">News Preferences (GNews)</Label>
+                  <div className="grid gap-6">
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-wider opacity-60">Categories</Label>
+                      <AutocompletePillInput 
+                        searchType="static"
+                        staticOptions={GNEWS_CATEGORIES}
+                        values={config.newsTopics}
+                        onChange={(vals) => setConfig(c => ({ ...c, newsTopics: vals }))}
+                        placeholder="Select categories..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-wider opacity-60">Languages</Label>
+                      <AutocompletePillInput 
+                        searchType="static"
+                        staticOptions={GNEWS_LANGUAGES}
+                        values={config.newsLanguages}
+                        onChange={(vals) => setConfig(c => ({ ...c, newsLanguages: vals }))}
+                        placeholder="Select languages..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-wider opacity-60">Region / Country</Label>
+                      <Select 
+                        value={config.newsCountry} 
+                        onValueChange={(val) => setConfig(c => ({ ...c, newsCountry: val }))}
+                      >
+                        <SelectTrigger className="h-12 rounded-xl">
+                          <SelectValue placeholder="Select country" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          {GNEWS_COUNTRIES.map(country => (
+                            <SelectItem key={country.value} value={country.value}>{country.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               )}
