@@ -44,26 +44,26 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
   }, []);
 
   useEffect(() => {
-    let ignore = false; // Cleanup flag to prevent race conditions
-
-    // Select greeting and message on mount to avoid hydration mismatch
+    let ignore = false;
+    
+    // Select greeting and message instantly
     const greeting = getTimeGreeting();
     const message = EASTER_EGGS[Math.floor(Math.random() * EASTER_EGGS.length)];
-    
     setTimeGreeting(greeting);
     setRandomMessage(message);
 
-    const fetchBriefing = async () => {
+    // Debounce the AI fetch to bypass React Strict Mode double-invocations
+    const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
         const input = convertConfigToBriefingInput(config);
         const result = await generatePersonalizedBriefing(input);
         
-        // Only update state if this effect execution is still current
         if (!ignore) {
           setBriefing(result);
         }
       } catch (err) {
+        console.error("AI Briefing Error:", err);
         if (!ignore) {
           setBriefing("Dashboard synchronized. Your personalized modules are up to date.");
         }
@@ -72,16 +72,14 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
           setIsLoading(false);
         }
       }
-    };
-
-    fetchBriefing();
+    }, 1500); // 1.5 second delay kills the ghost render request BEFORE it sends
 
     return () => {
-      // Mark as ignored if the effect re-fires or unmounts before the fetch completes
-      ignore = true; 
+      ignore = true;
+      clearTimeout(timer); // Crucial: Cancels the timer on unmount
     };
-    // Use JSON.stringify for config to ensure we only re-run on value changes, not reference changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Use JSON.stringify for config to ensure we only re-run on value changes, not reference changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(config), refreshKey]);
 
   return (
