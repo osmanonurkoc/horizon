@@ -72,29 +72,45 @@ export function AutocompletePillInput({
     return String(v1).toLowerCase() === String(v2).toLowerCase();
   };
 
-  React.useEffect(() => {
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+  const getLabel = (val: any) => {
+    if (!val) return "";
+    
+    // Check static options first for a matching label
+    const staticOpt = staticOptions.find(o => checkEquality(o.value, val));
+    if (staticOpt) return staticOpt.label;
 
+    if (typeof val === 'object') {
+      if ('label' in val) return val.label;
+      if ('name' in val) return val.name;
+      if ('value' in val) return val.value;
+      return val.id || JSON.stringify(val);
+    }
+    
+    return val;
+  };
+
+  const displayOptions = React.useMemo(() => {
     if (searchType === 'static') {
-      const filtered = staticOptions
+      const query = (inputValue || '').toLowerCase().trim();
+      return staticOptions
         .filter(opt => {
-          const textToSearch = typeof opt === 'object' ? String(opt.label || opt.value || '') : String(opt);
-          return textToSearch.toLowerCase().includes(inputValue.toLowerCase());
+          if (!query) return true; // Show all if input is empty
+          const text = typeof opt === 'object' ? String(opt.label || opt.value || '') : String(opt);
+          return text.toLowerCase().includes(query);
         })
         .map(opt => {
-          if (typeof opt === 'object') {
-            return { label: opt.label, value: opt.value, logo: opt.logo };
-          }
+          if (typeof opt === 'object') return { label: opt.label || opt.value, value: opt.value, logo: opt.logo };
           return { label: String(opt), value: opt };
         });
-      
-      setOptions(prev => {
-        const isSame = prev.length === filtered.length && 
-                      prev.every((v, i) => v.value === filtered[i].value);
-        return isSame ? prev : filtered;
-      });
-      return;
     }
+    return options; // Fallback to standard state for async fetches
+  }, [searchType, staticOptions, inputValue, options]);
+
+  React.useEffect(() => {
+    // STATIC TYPES DO NOT USE EFFECTS OR TIMEOUTS
+    if (searchType === 'static') return;
+
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
     if (!inputValue || inputValue.trim().length < 2) {
       if (options.length > 0) setOptions([]);
@@ -149,14 +165,13 @@ export function AutocompletePillInput({
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [inputValue, searchType, apiKey, staticOptions]);
+  }, [inputValue, searchType, apiKey]);
 
   const isSelected = (optionValue: any) => {
     return values.some(v => checkEquality(v, optionValue));
   };
 
-  const handleSelect = (option: AutocompleteOption, e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleSelect = (option: AutocompleteOption) => {
     if (option.value === null) return;
     
     if (isMulti) {
@@ -169,24 +184,6 @@ export function AutocompletePillInput({
       setOpen(false);
     }
     setInputValue("");
-    setOptions([]);
-  };
-
-  const getLabel = (val: any) => {
-    if (!val) return "";
-    
-    // Check static options first for a matching label
-    const staticOpt = staticOptions.find(o => checkEquality(o.value, val));
-    if (staticOpt) return staticOpt.label;
-
-    if (typeof val === 'object') {
-      if ('label' in val) return val.label;
-      if ('name' in val) return val.name;
-      if ('value' in val) return val.value;
-      return val.id || JSON.stringify(val);
-    }
-    
-    return val;
   };
 
   return (
@@ -210,18 +207,18 @@ export function AutocompletePillInput({
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="max-h-[300px] overflow-y-auto">
-            {loading ? (
+            {loading && searchType !== 'static' ? (
               <div className="py-6 flex items-center justify-center text-muted-foreground">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
                 <span>Searching...</span>
               </div>
-            ) : options.length === 0 ? (
+            ) : displayOptions.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                {inputValue.length < 2 && searchType !== 'static' ? "Type to search..." : "No results found."}
+                {searchType !== 'static' && inputValue.length < 2 ? "Type to search..." : "No results found."}
               </div>
             ) : (
               <div className="p-1">
-                {options.map((option, index) => {
+                {displayOptions.map((option, index) => {
                   const selected = isSelected(option.value);
                   return (
                     <div
@@ -230,7 +227,10 @@ export function AutocompletePillInput({
                         "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground",
                         selected && "bg-accent/50 text-primary font-bold"
                       )}
-                      onMouseDown={(e) => handleSelect(option, e as any)}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelect(option);
+                      }}
                     >
                       {option.logo && <img src={option.logo} alt="" className="w-4 h-4 mr-2" />}
                       <span className="flex-1 truncate">{option.label}</span>
