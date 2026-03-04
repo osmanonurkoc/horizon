@@ -62,10 +62,10 @@ export function ClockSection({ config, refreshKey = 0 }: { config: DiscoverConfi
         if (!ignore) {
           setBriefing(result);
         }
-      } catch (err) {
-        console.error("AI Briefing Error:", err);
+      } catch (err: any) {
+        console.error("Client Fetch Error:", err);
         if (!ignore) {
-          setBriefing("Dashboard synchronized. Your personalized modules are up to date.");
+          setBriefing(`Client Error: ${err.message || 'Failed to trigger Server Action'}`);
         }
       } finally {
         if (!ignore) {

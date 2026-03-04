@@ -133,10 +133,11 @@ const personalizedBriefingFlow = ai.defineFlow(
 
     try {
       const {output} = await prompt(promptInput);
-      return output?.briefing || "Dashboard synchronized. Modules are up to date and ready.";
-    } catch (err) {
+      return output?.briefing || "No briefing generated.";
+    } catch (err: any) {
       console.error("Briefing Flow Error:", err);
-      return "Dashboard synchronized. Modules are up to date and ready.";
+      // Return the actual error message to the client
+      return `AI Error: ${err.message || 'Unknown error'}. Check your Gemini API Key or Vercel logs.`;
     }
   }
 );
