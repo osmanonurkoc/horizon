@@ -44,6 +44,35 @@ export function AutocompletePillInput({
 
   const searchTimeout = React.useRef<NodeJS.Timeout | null>(null);
 
+  const checkEquality = (v1: any, v2: any) => {
+    if (v1 === undefined || v1 === null || v2 === undefined || v2 === null) return v1 === v2;
+    
+    // If both are objects
+    if (typeof v1 === 'object' && typeof v2 === 'object') {
+      if (v1.id && v2.id) return String(v1.id) === String(v2.id);
+      if (v1.value && v2.value) return String(v1.value).toLowerCase() === String(v2.value).toLowerCase();
+      if (v1.name && v2.name) return String(v1.name).toLowerCase() === String(v2.name).toLowerCase();
+      return JSON.stringify(v1) === JSON.stringify(v2);
+    }
+    
+    // If one is object and the other is a primitive (string/number)
+    if (typeof v1 === 'object') {
+      const matchStr = String(v2).toLowerCase();
+      return (v1.id && String(v1.id).toLowerCase() === matchStr) || 
+             (v1.value && String(v1.value).toLowerCase() === matchStr) || 
+             (v1.name && String(v1.name).toLowerCase() === matchStr);
+    }
+    if (typeof v2 === 'object') {
+      const matchStr = String(v1).toLowerCase();
+      return (v2.id && String(v2.id).toLowerCase() === matchStr) || 
+             (v2.value && String(v2.value).toLowerCase() === matchStr) || 
+             (v2.name && String(v2.name).toLowerCase() === matchStr);
+    }
+    
+    // If both are primitives (e.g., 'Technology' vs 'technology')
+    return String(v1).toLowerCase() === String(v2).toLowerCase();
+  };
+
   React.useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
@@ -111,17 +140,8 @@ export function AutocompletePillInput({
     };
   }, [inputValue, searchType, apiKey, staticOptions]);
 
-  const areValuesEqual = (a: any, b: any) => {
-    if (a === null || b === null || a === undefined || b === undefined) return a === b;
-    if (typeof a === 'object' && typeof b === 'object') {
-      if ('id' in a && 'id' in b) return a.id === b.id;
-      if ('value' in a && 'value' in b) return a.value === b.value;
-    }
-    return a === b;
-  };
-
   const isSelected = (optionValue: any) => {
-    return values.some(v => areValuesEqual(v, optionValue));
+    return values.some(v => checkEquality(v, optionValue));
   };
 
   const handleSelect = (option: AutocompleteOption, e: React.MouseEvent) => {
@@ -144,14 +164,17 @@ export function AutocompletePillInput({
 
   const getLabel = (val: any) => {
     if (!val) return "";
+    
+    // Check static options first for a matching label
+    const staticOpt = staticOptions.find(o => checkEquality(o.value, val));
+    if (staticOpt) return staticOpt.label;
+
     if (typeof val === 'object') {
       if ('name' in val) return val.name;
-      const staticOpt = staticOptions.find(o => o.value === val);
-      if (staticOpt) return staticOpt.label;
-      return JSON.stringify(val);
+      if ('label' in val) return val.label;
+      return val.id || JSON.stringify(val);
     }
-    const staticOpt = staticOptions.find(o => o.value === val);
-    if (staticOpt) return staticOpt.label;
+    
     return val;
   };
 
