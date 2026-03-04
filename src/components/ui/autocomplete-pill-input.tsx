@@ -45,13 +45,12 @@ export function AutocompletePillInput({
   const searchTimeout = React.useRef<NodeJS.Timeout | null>(null);
 
   const checkEquality = (v1: any, v2: any) => {
-    if (v1 === undefined || v1 === null || v2 === undefined || v2 === null) return v1 === v2;
+    if (!v1 || !v2) return false;
     
     // If both are objects
     if (typeof v1 === 'object' && typeof v2 === 'object') {
       if (v1.id && v2.id) return String(v1.id) === String(v2.id);
       if (v1.value && v2.value) return String(v1.value).toLowerCase() === String(v2.value).toLowerCase();
-      if (v1.name && v2.name) return String(v1.name).toLowerCase() === String(v2.name).toLowerCase();
       return JSON.stringify(v1) === JSON.stringify(v2);
     }
     
@@ -146,18 +145,17 @@ export function AutocompletePillInput({
 
   const handleSelect = (option: AutocompleteOption, e: React.MouseEvent) => {
     e.preventDefault();
+    if (option.value === null) return;
     
-    const alreadySelected = isSelected(option.value);
-
     if (isMulti) {
-      if (!alreadySelected) {
+      const exists = values.some(v => checkEquality(v, option.value));
+      if (!exists) {
         onChange([...values, option.value]);
       }
     } else {
       onChange([option.value]);
       setOpen(false);
     }
-    
     setInputValue("");
     setOptions([]);
   };
