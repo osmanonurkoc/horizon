@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
 config();
 
-import '@/ai/flows/personalized-briefing.ts';
+// Note: Personalized Briefing has been refactored to a pure TypeScript implementation.
+// No Genkit flow registration is required.
