@@ -99,9 +99,10 @@ export function convertConfigToBriefingInput(config: DiscoverConfig): Personaliz
       newsFeed: config.enabledWidgets.newsFeed,
       sports: config.enabledWidgets.sports,
     },
+    apiKeys: config.apiKeys,
     location: config.location,
     newsTopics: config.newsTopics,
     stocks: config.stocks,
-    sportsTeams: config.sportsTeams.map(t => t.name),
+    sportsTeams: config.sportsTeams,
   };
 }

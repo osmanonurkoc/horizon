@@ -17,11 +17,12 @@ const PersonalizedBriefingInputSchema = z.object({
     market: z.boolean().default(false),
     newsFeed: z.boolean().default(false),
     sports: z.boolean().default(false),
-  }).describe('Flags indicating which widgets are enabled by the user.'),
-  location: z.string().optional().describe('User\'s configured location for weather.'),
-  newsTopics: z.array(z.string()).optional().describe('User\'s configured news topics.'),
-  stocks: z.array(z.string()).optional().describe('User\'s configured stock tickers.'),
-  sportsTeams: z.array(z.string()).optional().describe('User\'s configured sports teams.'),
+  }),
+  apiKeys: z.any().optional(),
+  location: z.string().optional(),
+  newsTopics: z.array(z.any()).optional(),
+  stocks: z.array(z.any()).optional(),
+  sportsTeams: z.array(z.any()).optional(),
 });
 export type PersonalizedBriefingInput = z.infer<typeof PersonalizedBriefingInputSchema>;
 
@@ -100,12 +101,12 @@ const personalizedBriefingFlow = ai.defineFlow(
     let marketSummary: string | undefined;
     let sportsSummary: string | undefined;
 
-    if (input.enabledWidgets.weather && input.location) {
-      weatherData = await getWeatherData(input.location);
+    if (input.enabledWidgets.weather && input.location && input.apiKeys?.weather) {
+      weatherData = await getWeatherData(input.location, input.apiKeys.weather);
     }
 
-    if (input.enabledWidgets.newsFeed && input.newsTopics && input.newsTopics.length > 0) {
-      newsHeadlines = await getNewsHeadlines(input.newsTopics);
+    if (input.enabledWidgets.newsFeed && input.newsTopics && input.apiKeys?.news) {
+      newsHeadlines = await getNewsHeadlines(input.newsTopics, input.apiKeys.news);
     }
 
     if (input.enabledWidgets.market && input.stocks && input.stocks.length > 0) {
@@ -113,7 +114,7 @@ const personalizedBriefingFlow = ai.defineFlow(
     }
 
     if (input.enabledWidgets.sports && input.sportsTeams && input.sportsTeams.length > 0) {
-      sportsSummary = await getSportsSummary(input.sportsTeams);
+      sportsSummary = await getSportsSummary(input.sportsTeams, input.apiKeys?.sports || '3');
     }
 
     const promptInput = {
@@ -144,28 +145,71 @@ export async function generatePersonalizedBriefing(input: PersonalizedBriefingIn
   return personalizedBriefingFlow(input);
 }
 
-async function getWeatherData(location: string | undefined): Promise<string | undefined> {
-  if (!location) return undefined;
-  return `Forecast for ${location}: Highs of 22°C. Scattered clouds with a 40% chance of rain developing in the late afternoon.`;
+async function getWeatherData(location: string, apiKey: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${apiKey}&units=metric`);
+    const data = await res.json();
+    if (data.weather && data.main) {
+      return `Current weather in ${location}: ${data.weather[0].description}, Temp: ${Math.round(data.main.temp)}°C.`;
+    }
+  } catch (e) { return undefined; }
+  return undefined;
 }
 
-async function getNewsHeadlines(topics: string[] | undefined): Promise<string[] | undefined> {
-  if (!topics || topics.length === 0) return undefined;
-  return [
-    'Major tech sector updates show strong quarterly performance.',
-    'Renewable energy projects gain momentum in urban planning.',
-    'Global logistics shifts impact early market trading.'
-  ];
+async function getNewsHeadlines(topics: any[], apiKey: string): Promise<string[] | undefined> {
+  if (!topics.length) return undefined;
+  try {
+    const topicVal = typeof topics[0] === 'object' ? (topics[0].value || 'general') : topics[0];
+    const res = await fetch(`https://gnews.io/api/v4/top-headlines?category=${topicVal}&lang=en&max=3&apikey=${apiKey}`);
+    const data = await res.json();
+    if (data.articles) {
+      return data.articles.slice(0, 3).map((a: any) => a.title);
+    }
+  } catch(e) { return undefined; }
+  return undefined;
 }
 
-async function getMarketSummary(stocks: string[] | undefined): Promise<string | undefined> {
-  if (!stocks || stocks.length === 0) return undefined;
-  const primary = stocks[0].split(' ')[0];
-  return `Your portfolio is trending positively, led by strong movement in ${primary}.`;
+async function getMarketSummary(stocks: any[]): Promise<string | undefined> {
+  if (!stocks.length) return undefined;
+  try {
+    const symbol = typeof stocks[0] === 'object' ? stocks[0].value : stocks[0];
+    const parsedSymbol = symbol.split(' ')[0];
+    // Direct fetch (No CORS needed on server)
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${parsedSymbol}?interval=1d&range=1d`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const data = await res.json();
+    const meta = data.chart?.result?.[0]?.meta;
+    if (meta && meta.regularMarketPrice && meta.chartPreviousClose) {
+      const price = meta.regularMarketPrice;
+      const diff = ((price - meta.chartPreviousClose) / meta.chartPreviousClose) * 100;
+      return `${parsedSymbol} is trading at ${price.toFixed(2)} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)}% today).`;
+    }
+  } catch(e) { return undefined; }
+  return undefined;
 }
 
-async function getSportsSummary(teams: string[] | undefined): Promise<string | undefined> {
-  if (!teams || teams.length === 0) return undefined;
-  const team = teams[0];
-  return `The ${team} have their next scheduled fixture appearing tonight. Local coverage and stats are synchronized.`;
+async function getSportsSummary(teams: any[], apiKey: string): Promise<string | undefined> {
+  if (!teams.length) return undefined;
+  try {
+    const team = teams[0];
+    const teamId = typeof team === 'object' ? team.id : team;
+    const teamName = typeof team === 'object' ? team.name : team;
+    
+    // Check Next Match
+    let res = await fetch(`https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsnext.php?id=${teamId}`);
+    let data = await res.json();
+    if (data.events && data.events.length > 0) {
+       const next = data.events[0];
+       return `${teamName} plays ${next.strAwayTeam === teamName ? next.strHomeTeam : next.strAwayTeam} on ${next.dateEvent}.`;
+    }
+    // Fallback to Last Match
+    res = await fetch(`https://www.thesportsdb.com/api/v1/json/${apiKey}/eventslast.php?id=${teamId}`);
+    data = await res.json();
+    if (data.results && data.results.length > 0) {
+       const last = data.results[0];
+       return `${teamName} latest result: ${last.strHomeTeam} ${last.intHomeScore} - ${last.intAwayScore} ${last.strAwayTeam}.`;
+    }
+  } catch(e) { return undefined; }
+  return undefined;
 }
