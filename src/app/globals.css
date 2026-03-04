@@ -59,6 +59,40 @@
     @apply bg-background text-foreground font-body antialiased;
     overflow-x: hidden;
   }
+
+  /* Custom Catppuccin & Material Scrollbar Integration */
+  /* Firefox Support */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  /* Webkit Support (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent; /* Floating Material effect */
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 9999px; /* Material pill shape */
+    border: 3px solid hsl(var(--background)); /* Creates a padding/floating illusion */
+    background-clip: padding-box;
+    transition: background-color 0.2s ease-in-out;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--primary) / 0.5); /* Accent highlight on interaction */
+  }
+
+  /* Handle corner where vertical and horizontal scrollbars meet */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 @layer components {
